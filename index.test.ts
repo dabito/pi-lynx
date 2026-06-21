@@ -11,6 +11,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
 	parseLinks,
@@ -23,8 +24,10 @@ import {
 
 // ── Fixtures ──────────────────────────────────────────────────────────
 
-const DDG_RUST_RAW = readFileSync("/tmp/ddg-rust.txt", "utf8");
-const DDG_GITHUB_RAW = readFileSync("/tmp/ddg-github.txt", "utf8");
+const fixture = (name: string) => fileURLToPath(new URL(`./test/fixtures/${name}`, import.meta.url));
+
+const DDG_RUST_RAW = readFileSync(fixture("ddg-rust.txt"), "utf8");
+const DDG_GITHUB_RAW = readFileSync(fixture("ddg-github.txt"), "utf8");
 
 // ── Unit tests: parseLinks ────────────────────────────────────────────
 
@@ -298,7 +301,8 @@ async function withRetry<T>(
 }
 
 describe("integration: doSearch", () => {
-	const runIntegration = lynxAvailable && process.env.PI_LYNX_INTEGRATION === "1";
+	const runIntegration =
+		lynxAvailable && process.env.PI_LYNX_INTEGRATION === "1";
 	const maybeIt = runIntegration ? it : it.skip;
 
 	maybeIt(
