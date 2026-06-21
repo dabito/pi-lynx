@@ -1,0 +1,125 @@
+   #[1]DuckDuckGo (Lite)
+
+
+   DuckDuckGo
+
+
+   rust language___________________________ Search
+
+   [All Regions_____] [Any Time__]
+
+
+   Next Page >
+
+
+   Zero-click info: [2]Rust (programming language)
+   Rust is a general-purpose programming language which emphasizes
+   performance, type safety, concurrency, and memory safety. Rust supports
+   multiple programming paradigms. It was influenced by ideas from
+   functional programming, including immutability, higher-order functions,
+   algebraic data types, and pattern matching. It also supports
+   object-oriented programming via structs, enums, traits, and methods.
+   [3]More at "Wikipedia"
+
+   1.  [4]Rust Programming Language
+       Rust is a fast, reliable, and productive programming language that
+   can run on embedded devices, web services, and more. Learn how to get
+   started, why Rust is different, and what companies are using it in
+   production.
+       rust-lang.org
+
+   2.  [5]Rust (programming language) - Wikipedia
+       Rust (programming language) ... Rust is a general-purpose
+   programming language which emphasizes performance, type safety,
+   concurrency, and memory safety. Rust supports multiple programming
+   paradigms. It was influenced by ideas from functional programming,
+   including immutability, higher-order functions, algebraic data types,
+   and pattern matching.
+       en.wikipedia.org/wiki/Rust_(programming_language)
+
+   3.  [6]Install Rust - Rust Programming Language
+       A language empowering everyone to build reliable and efficient
+   software.
+       rust-lang.org/tools/install/
+
+   4.  [7]Rust Tutorial - W3Schools
+       Rust is a popular programming language used to build everything
+   from web servers to game engines. Rust is known for being very fast,
+   and is similar to C and C++ in language.
+       www.w3schools.com/rust/index.php
+
+   5.  [8]Introduction to Rust Programming Language - GeeksforGeeks
+       Rust is a blazing fast and memory-efficient static compiled
+   language with a rich type system and ownership model. It can be used to
+   power performance-critical services while guaranteeing memory-safety
+   and thread-safety, empowering developers to debug at compile-time.
+
+   www.geeksforgeeks.org/rust/introduction-to-rust-programming-language/
+
+   6.  [9]The Rust Programming Language - GitHub Pages
+       The Rust Programming Language The Rust Programming Language by
+   Steve Klabnik, Carol Nichols, and Chris Krycho, with contributions from
+   the Rust Community This version of the text assumes you're using Rust
+   1.81.0 (released 2024-09-04) or later. See the "Installation" section
+   of Chapter 1 to install or update Rust.
+       rust-lang.github.io/book/
+
+   7.  [10]rust-lang / rust: Empowering everyone to build reliable and ...
+   - GitHub
+       The Rust Foundation owns and protects the Rust and Cargo trademarks
+   and logos (the "Rust Trademarks"). If you want to use these names or
+   brands, please read the Rust language trademark policy.
+       github.com/rust-lang/rust
+
+   8.  [11]Outline of the Rust programming language - Wikipedia
+       Rust is a multi-paradigm programming language emphasizing
+   performance, memory safety, and concurrency. Rust was initially
+   developed by Graydon Hoare starting in 2006, later sponsored and
+   maintained by Mozilla Research starting in 2009, and first publicly
+   released in 2010, with version 1.0 released in 2015.
+       en.wikipedia.org/wiki/Outline_of_the_Rust_programming_language
+
+   9.  [12]What is Rust, and how do you get started programming with it?
+       So, you're getting into software development, and one elemental
+   name keeps coming up: Rust. After experiencing that myself, I looked
+   into the increasingly popular programming language. Here's what I
+   learned about it, plus the steps it took to start writing Rust programs
+   myself. Rust is a fast, safe programming language First created in 2006
+   by a Mozilla employee, Rust is a programming language ...
+
+   www.howtogeek.com/what-is-the-rust-programming-language-and-how-to-get-
+   started/
+
+   10.  [13]Introduction to Rust · Learn Rust | LearningRust.org
+       Introduction to Rust TL;DR: Rust is a systems programming language
+   that guarantees memory safety without a garbage collector. In this
+   lesson you'll write your first Rust program, learn why ownership makes
+   Rust different, and see zero-cost abstractions in action. Estimated: 15
+   minutes. → Jump to code examples Welcome to your first lesson in Rust
+   programming! In this introduction, we'll cover ...
+       learningrust.org/lessons/01-introduction
+
+
+   Next Page >
+
+
+   rust language___________________________ Search
+
+
+   [sl_l]
+
+References
+
+   1. https://duckduckgo.com/opensearch_lite_v2.xml
+   2. https://en.wikipedia.org/wiki/Rust_(programming_language)
+   3. https://en.wikipedia.org/wiki/Rust_(programming_language)
+   4. https://duckduckgo.com/l/?uddg=https://rust-lang.org/&rut=e666b482fc2cae31a3d31e31089f73290d59ea861bfca2f7748b5a2ce07d09ee
+   5. https://duckduckgo.com/l/?uddg=https://en.wikipedia.org/wiki/Rust_(programming_language)&rut=54d728dac970859b1fc1c71457003ef20d6bc180ac55c835b11e1988b5f8ec5b
+   6. https://duckduckgo.com/l/?uddg=https://rust-lang.org/tools/install/&rut=1dff96ea28c485c063f2c1c884bac0f27a07f33c45381e6a3e870985b5647615
+   7. https://duckduckgo.com/l/?uddg=https://www.w3schools.com/rust/index.php&rut=8128a0714a1b807fbd6fe275043c42ca5f288f2470d9d5b92d625fdd5bfbe7c7
+   8. https://duckduckgo.com/l/?uddg=https://www.geeksforgeeks.org/rust/introduction-to-rust-programming-language/&rut=493b8ef52838e45c23e28619f5f06b2478a368267d8c416a13c489ed2d10bc38
+   9. https://duckduckgo.com/l/?uddg=http://rust-lang.github.io/book/&rut=eab1ccdbe6e206cfa7a3c32616ffd352bb7eafa6b226645f416c77d1b3219c3d
+  10. https://duckduckgo.com/l/?uddg=https://github.com/rust-lang/rust&rut=7fde1c34f65d899cc13a426b4bbcfe9f5c0779484d6aa6fdbb9b9c40e5a67f71
+  11. https://duckduckgo.com/l/?uddg=https://en.wikipedia.org/wiki/Outline_of_the_Rust_programming_language&rut=2f8e4b7c783badff50c3f0ef32cf2e5dfa181cb924afbd11f11cda32a439ce82
+  12. https://duckduckgo.com/l/?uddg=https://www.howtogeek.com/what-is-the-rust-programming-language-and-how-to-get-started/&rut=d5d76c697eed5631254f69c9e3910a65a2255c2d584f0cacd2ea31e7ae9cdaa1
+  13. https://duckduckgo.com/l/?uddg=https://learningrust.org/lessons/01-introduction&rut=f2d61217ed428b258b186981b849eb09c933c73823610f7ead2a1f68568c7cd8

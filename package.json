@@ -15,7 +15,8 @@
   ],
   "scripts": {
     "test": "npx tsx index.test.ts",
-    "build": "tsc --noEmit --strict --skipLibCheck index.ts"
+    "build": "npm run typecheck",
+    "typecheck": "tsc --noEmit --strict --skipLibCheck index.ts"
   },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "^0.79.9",
@@ -25,5 +26,8 @@
   },
   "dependencies": {
     "typebox": "^1.3.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

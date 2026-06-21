@@ -1,0 +1,108 @@
+   #[1]DuckDuckGo (Lite)
+
+
+   DuckDuckGo
+
+
+   pi extension site:github.com____________ Search
+
+   [All Regions_____] [Any Time__]
+
+
+   Next Page >
+
+
+   1.  [2]A set of delightful extensions for Pi - GitHub
+       A set of delightful extensions for Pi. Contribute to
+   tmustier/pi-extensions development by creating an account on GitHub.
+       github.com/tmustier/pi-extensions     2026-01-06T15:42:00.0000000
+
+   2.  [3]GitHub - rytswd/pi-agent-extensions
+       pi-agent-extensions is a collection of pi coding agent extensions
+   that enhance the development experience. Each extension is a standalone
+   TypeScript file that plugs into pi's extension system.These extensions
+   are configured for global auto-discovery and loaded on every pi
+   session. By default, pi's extension system enables all the extensions.
+       github.com/rytswd/pi-agent-extensions
+
+   3.  [4]GitHub - pi-packages/tmustier-pi-extensions: A set of delightful
+   ...
+       A set of delightful extensions for Pi. Contribute to
+   pi-packages/tmustier-pi-extensions development by creating an account
+   on GitHub.
+       github.com/pi-packages/tmustier-pi-extensions
+
+   4.  [5]pi-extensions/extending-pi at main · tmustier/pi-extensions ·
+   GitHub
+       Guide for extending Pi — decide between Agent Skills, extensions,
+   prompt templates, themes, context files, custom models/providers, and
+   Pi packages, then create and package them. The skill emphasizes Pi's
+   extension-first architecture: when changing Pi behavior, inspect the
+   extension docs, examples, and installed types/source before considering
+   a Pi internal patch. Includes nested Agent ...
+       github.com/tmustier/pi-extensions/tree/main/extending-pi
+
+   5.  [6]GitHub - qualisero/awesome-pi-agent: Awesome list of add-ons,
+   hooks ...
+       Awesome list of add-ons, hooks, tools, skills, and resources for
+   the pi coding agent (pi-mono). - qualisero/awesome-pi-agent
+       github.com/qualisero/awesome-pi-agent
+   2026-01-05T00:00:00.0000000
+
+   6.  [7]GitHub - nicobailon/pi-subagents: Pi extension for async
+   subagent ...
+       Pi extension for async subagent delegation with truncation,
+   artifacts, and session sharing - nicobailon/pi-subagents
+       github.com/nicobailon/pi-subagents
+
+   7.  [8]Extensions, skills, and themes for Pi coding agent - GitHub
+       A collection of extensions, skills, and themes for Pi, the AI
+   coding agent for the terminal. Extensions cover everything from UI
+   polish (custom footer, tool pills, leader-key palette) to deep workflow
+   tooling (semantic git review, session archiving, context handoff
+   between sessions, cmux integration).
+       github.com/tomsej/pi-ext     2026-02-23T20:43:00.0000000
+
+   8.  [9]GitHub - MattDevy/pi-extensions: A set of pi-extensions,
+   including pi ...
+       A set of pi-extensions, including pi-continuous-learning that
+   continually improves you pi coding agent experience -
+   MattDevy/pi-extensions
+       github.com/MattDevy/pi-extensions
+
+   9.  [10]GitHub - jmcombs/pi-extensions: A monorepo of high-quality
+   extensions ...
+       A monorepo of high-quality extensions for the Pi coding agent.
+   Every package here is a Pi extension that can be installed individually
+   from npm. Packages are tagged with the pi-package keyword so they
+   appear in the pi.dev gallery.
+       github.com/jmcombs/pi-extensions
+
+   10.  [11]pi-extension · GitHub Topics · GitHub
+       A pi extension that brings Claude Code-style task tracking and
+   coordination to pi. Track multi-step work with structured tasks,
+   dependency management, and a persistent visual widget.
+       github.com/topics/pi-extension
+
+
+   Next Page >
+
+
+   pi extension site:github.com____________ Search
+
+
+   [sl_l]
+
+References
+
+   1. https://duckduckgo.com/opensearch_lite_v2.xml
+   2. https://duckduckgo.com/l/?uddg=https://github.com/tmustier/pi-extensions&rut=22ecea9e0cf9cb1770d5be31be0178fe303a51ad1611e8ecac0d2a1699f137cd
+   3. https://duckduckgo.com/l/?uddg=https://github.com/rytswd/pi-agent-extensions&rut=244ce0a360005eb352764628b49a33a169c2fa9649270ced812d6a171153acd1
+   4. https://duckduckgo.com/l/?uddg=https://github.com/pi-packages/tmustier-pi-extensions&rut=0d53360a44aa74927232297bb66fb994d06b9031491f62b6c12ab62ffaf6e17a
+   5. https://duckduckgo.com/l/?uddg=https://github.com/tmustier/pi-extensions/tree/main/extending-pi&rut=0765b365385ed07e587684e2dcc2d834664f7b3249d15a77c3c36e129eed4fbd
+   6. https://duckduckgo.com/l/?uddg=https://github.com/qualisero/awesome-pi-agent&rut=8d395ca01aec03210e0c827701730de6cc4404b5719737233548a2f97bcc2424
+   7. https://duckduckgo.com/l/?uddg=https://github.com/nicobailon/pi-subagents&rut=9d703b7908ff580be94398f32cac27665ae5dd1d1f7a233bd67e4c76b9358c3f
+   8. https://duckduckgo.com/l/?uddg=https://github.com/tomsej/pi-ext&rut=70b4ed6e68d32e40d18b1ca81e0ebf20a0b49ee732f292432beae52ce4a402cc
+   9. https://duckduckgo.com/l/?uddg=https://github.com/MattDevy/pi-extensions&rut=043f080a1d1f7d952c2056c6a6fb9e5ad0d2b96ac25a74731a19b868682fa5ee
+  10. https://duckduckgo.com/l/?uddg=https://github.com/jmcombs/pi-extensions&rut=67c090cbc4a51ec72ec1bdf7d66cb2bcecaf98cd8ac24256039c036efffc99a3
+  11. https://duckduckgo.com/l/?uddg=https://github.com/topics/pi-extension&rut=5eea3432f470184d6ec76cd21e871dfbaec511167bb36c787793f3d084484e94
