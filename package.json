@@ -1,6 +1,6 @@
 {
   "name": "pi-lynx",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Pi extension for web search and page fetch via lynx + DuckDuckGo Lite. Terminal browser, web scrape, and search tools with zero API keys.",
   "type": "module",
   "main": "index.ts",
