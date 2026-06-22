@@ -1,6 +1,6 @@
 # pi-lynx
 
-A lean Pi extension that provides web search and page fetches using your local `lynx` browser and DuckDuckGo Lite. No API keys, no browser automation.
+Pi extension for web search and page fetch via lynx + DuckDuckGo Lite. Terminal browser, web scrape, and search tools with zero API keys.
 
 ## Requirements
 
