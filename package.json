@@ -9,6 +9,7 @@
   "keywords": [
     "pi-package",
     "pi",
+    "pi-coding-agent",
     "extension",
     "web-search",
     "lynx",
@@ -38,6 +39,13 @@
   ],
   "pi": {
     "extensions": ["./index.ts"]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dabito/pi-lynx"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "engines": {
     "node": ">=20"
