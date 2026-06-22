@@ -2,47 +2,36 @@
 
 Pi extension for web search and page fetch via lynx + DuckDuckGo Lite. Terminal browser, web scrape, and search tools with zero API keys.
 
-## Requirements
+## Install
+
+```bash
+pi install npm:pi-lynx
+```
+
+Then reload or restart pi:
+
+```text
+/reload
+```
+
+### Requirements
 
 - [lynx](https://lynx.invisible-island.net/) installed and on `PATH`
 - Pi coding agent
 
-## Install
+### Alternative: install from git
 
-Clone the repo:
+```bash
+pi install git:github.com/dabito/pi-lynx@v1.0.2
+```
+
+### Alternative: install from source
 
 ```bash
 git clone https://github.com/dabito/pi-lynx.git
 cd pi-lynx
 npm install
-```
-
-### Global extension
-
-```bash
-mkdir -p ~/.pi/agent/extensions/pi-lynx
-ln -s "$PWD/index.ts" ~/.pi/agent/extensions/pi-lynx/index.ts
-```
-
-### Project-local extension
-
-```bash
-mkdir -p .pi/extensions/pi-lynx
-ln -s /path/to/pi-lynx/index.ts .pi/extensions/pi-lynx/index.ts
-```
-
-### Quick test
-
-```bash
-pi -e /path/to/pi-lynx/index.ts
-```
-
-### Via settings.json
-
-```json
-{
-  "extensions": ["/path/to/pi-lynx"]
-}
+pi -e .
 ```
 
 ## Tools
@@ -64,21 +53,21 @@ lynx_web_search_wikipedia ← convenience wrapper (pre-set site:wikipedia.org)
 
 Fetch a web page and extract its text content and links using lynx.
 
-| Name | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| `url` | string | ✓ | — | URL to fetch |
-| `max_lines` | number | | 300 | Max lines of body text (50–2000, excludes Links section) |
-| `include_links` | boolean | | true | Include extracted links section |
+| Name            | Type    | Required | Default | Description                                              |
+| --------------- | ------- | -------- | ------- | -------------------------------------------------------- |
+| `url`           | string  | ✓        | —       | URL to fetch                                             |
+| `max_lines`     | number  |          | 300     | Max lines of body text (50–2000, excludes Links section) |
+| `include_links` | boolean |          | true    | Include extracted links section                          |
 
 ### `lynx_web_search`
 
 Search the web using DuckDuckGo Lite. Returns structured results with titles, snippets, domains, and URLs.
 
-| Name | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| `query` | string | ✓ | — | Search query; supports `!gh` and `!w` shortcuts |
-| `max_results` | number | | 8 | Max results to return (1–20) |
-| `site` | string | | — | Restrict to `"github"` or `"wikipedia"` |
+| Name          | Type   | Required | Default | Description                                     |
+| ------------- | ------ | -------- | ------- | ----------------------------------------------- |
+| `query`       | string | ✓        | —       | Search query; supports `!gh` and `!w` shortcuts |
+| `max_results` | number |          | 8       | Max results to return (1–20)                    |
+| `site`        | string |          | —       | Restrict to `"github"` or `"wikipedia"`         |
 
 Shortcuts:
 
@@ -89,19 +78,19 @@ Shortcuts:
 
 Search GitHub using DuckDuckGo Lite. Convenience wrapper around `lynx_web_search` with `site:github.com` pre-set.
 
-| Name | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| `query` | string | ✓ | — | Search query |
-| `max_results` | number | | 8 | Max results to return (1–20) |
+| Name          | Type   | Required | Default | Description                  |
+| ------------- | ------ | -------- | ------- | ---------------------------- |
+| `query`       | string | ✓        | —       | Search query                 |
+| `max_results` | number |          | 8       | Max results to return (1–20) |
 
 ### `lynx_web_search_wikipedia`
 
 Search Wikipedia using DuckDuckGo Lite. Convenience wrapper around `lynx_web_search` with `site:wikipedia.org` pre-set.
 
-| Name | Type | Required | Default | Description |
-|------|------|----------|---------|-------------|
-| `query` | string | ✓ | — | Search query |
-| `max_results` | number | | 8 | Max results to return (1–20) |
+| Name          | Type   | Required | Default | Description                  |
+| ------------- | ------ | -------- | ------- | ---------------------------- |
+| `query`       | string | ✓        | —       | Search query                 |
+| `max_results` | number |          | 8       | Max results to return (1–20) |
 
 ## Notes on DuckDuckGo Lite
 
