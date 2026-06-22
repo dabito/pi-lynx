@@ -1,6 +1,6 @@
 {
   "name": "pi-lynx",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Pi extension for web search and fetch via lynx + DuckDuckGo Lite. Zero API keys.",
   "type": "module",
   "main": "index.ts",
@@ -42,7 +42,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/dabito/pi-lynx"
+    "url": "git+https://github.com/dabito/pi-lynx.git"
   },
   "publishConfig": {
     "access": "public"
