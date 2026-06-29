@@ -14,7 +14,7 @@
  *     ↑ used by
  *   lynx_web_search_github / lynx_web_search_wikipedia (site-specific wrappers)
  *
- * Zero dependencies — only requires `lynx` on PATH.
+ * One runtime dependency (`typebox`) plus `lynx` on PATH.
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -41,7 +41,11 @@ async function findLynx(): Promise<string | null> {
 	}
 }
 
-async function lynxDump(url: string, timeoutMs = 15_000): Promise<string> {
+async function lynxDump(
+	url: string,
+	timeoutMs = 15_000,
+	signal?: AbortSignal,
+): Promise<string> {
 	const lynxPath = await findLynx();
 	if (!lynxPath) throw new Error("lynx not found on PATH. Install lynx first.");
 
@@ -50,10 +54,69 @@ async function lynxDump(url: string, timeoutMs = 15_000): Promise<string> {
 	const { stdout } = await execFileAsync(
 		lynxPath,
 		["-dump", "-assume_charset=UTF-8", "-display_charset=UTF-8", url],
-		{ timeout: timeoutMs, maxBuffer: 2 * 1024 * 1024 },
+		{ timeout: timeoutMs, maxBuffer: 2 * 1024 * 1024, signal },
 	);
 
 	return stdout;
+}
+
+const DEFAULT_SITE_SEARCH_MIN_INTERVAL_MS = 3000;
+const MIN_SITE_SEARCH_MIN_INTERVAL_MS = 1000;
+
+export function getSiteSearchMinIntervalMs(value?: string): number {
+	if (!value) return DEFAULT_SITE_SEARCH_MIN_INTERVAL_MS;
+
+	const parsed = Number.parseInt(value, 10);
+	if (!Number.isFinite(parsed)) return DEFAULT_SITE_SEARCH_MIN_INTERVAL_MS;
+
+	return Math.max(MIN_SITE_SEARCH_MIN_INTERVAL_MS, parsed);
+}
+
+const SITE_SEARCH_MIN_INTERVAL_MS = getSiteSearchMinIntervalMs(
+	typeof process !== "undefined"
+		? process.env.PI_LYNX_SITE_SEARCH_INTERVAL_MS
+		: undefined,
+);
+let lastSiteSearchAt = 0;
+let siteSearchQueue: Promise<void> = Promise.resolve();
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+	if (ms <= 0) return Promise.resolve();
+	if (signal?.aborted) return Promise.reject(new Error("Search cancelled."));
+
+	return new Promise((resolve, reject) => {
+		const timeout = setTimeout(cleanupAndResolve, ms);
+
+		function cleanupAndResolve(): void {
+			signal?.removeEventListener("abort", cleanupAndReject);
+			resolve();
+		}
+
+		function cleanupAndReject(): void {
+			clearTimeout(timeout);
+			reject(new Error("Search cancelled."));
+		}
+
+		signal?.addEventListener("abort", cleanupAndReject, { once: true });
+	});
+}
+
+async function waitForSiteSearchSlot(signal?: AbortSignal): Promise<void> {
+	const run = siteSearchQueue.catch(() => undefined).then(async () => {
+		const waitMs = Math.max(
+			0,
+			lastSiteSearchAt + SITE_SEARCH_MIN_INTERVAL_MS - Date.now(),
+		);
+		await sleep(waitMs, signal);
+		lastSiteSearchAt = Date.now();
+	});
+
+	siteSearchQueue = run.catch(() => undefined);
+	await run;
+}
+
+function isSiteFilteredSearch(siteFilter?: string): boolean {
+	return Boolean(siteFilter?.startsWith("site:"));
 }
 
 /** Extract the [N] → URL mapping from lynx's References section */
@@ -117,8 +180,9 @@ async function doFetch(
 	url: string,
 	maxLines: number,
 	includeLinks: boolean,
+	signal?: AbortSignal,
 ): Promise<FetchResult> {
-	const raw = await lynxDump(url);
+	const raw = await lynxDump(url, 15_000, signal);
 	const links = parseLinks(raw);
 	const lines = raw.split("\n");
 
@@ -195,59 +259,115 @@ function extractInstantAnswer(lines: string[]): string | null {
 	return zcLines.length > 0 ? zcLines.join(" ") : null;
 }
 
-/** Parse a single numbered result block from DDG Lite output */
-function parseResultBlock(
+/** State-machine based parser for DDG Lite search result blocks */
+const enum ParseState {
+	IDLE = "idle",
+	IN_RESULT = "in_result",
+}
+
+interface ResultAccumulator {
+	title: string;
+	titleLinkNum: number | null;
+	snippetLines: string[];
+	domain: string;
+}
+
+function parseResultBlocks(
 	lines: string[],
-	startIdx: number,
 	links: Map<number, string>,
-): { result: SearchResult | null; nextIdx: number } {
-	const match = /^\s*(\d+)\.\s{2,}(.+)/.exec(lines[startIdx]);
-	if (!match) return { result: null, nextIdx: startIdx + 1 };
+	maxResults: number,
+): SearchResult[] {
+	const results: SearchResult[] = [];
+	let state: ParseState = ParseState.IDLE;
+	let acc: ResultAccumulator | null = null;
 
-	const title = stripLinkMarkers(match[2].trim());
-	const snippetLines: string[] = [];
-	let domain = "";
-	let resultLinkNum: number | null = null;
-	let i = startIdx + 1;
+	function flushAccumulator(): void {
+		if (!acc || !acc.title) return;
 
-	const titleLinkMatch = /\[(\d+)\]/.exec(match[2]);
-	if (titleLinkMatch) resultLinkNum = parseInt(titleLinkMatch[1], 10);
-
-	while (i < lines.length) {
-		const line = lines[i];
-		if (/^\s*\d+\.\s{2,}/.test(line)) break;
-		if (/^(Next Page|< Previous Page)/.test(line.trim())) {
-			i++;
-			break;
+		let url = "";
+		if (acc.titleLinkNum !== null && links.has(acc.titleLinkNum)) {
+			url = resolveDdgRedirect(links.get(acc.titleLinkNum) ?? "");
 		}
+
+		results.push({
+			title: acc.title,
+			snippet: acc.snippetLines.join(" "),
+			domain: acc.domain,
+			url,
+		});
+		acc = null;
+	}
+
+	for (let i = 0; i < lines.length; i++) {
+		if (results.length >= maxResults) break;
+
+		const line = lines[i];
 		const trimmed = line.trim();
-		if (!trimmed) {
-			i++;
+
+		// Detect result start: "  N.  Title" (numbered line with title)
+		const titleMatch = /^\s*(\d+)\.\s{2,}(.+)/.exec(line);
+
+		if (titleMatch) {
+			// If we were in a result, flush it
+			if (state === ParseState.IN_RESULT) {
+				flushAccumulator();
+			}
+
+			if (results.length >= maxResults) break;
+
+			// Start a new result
+			const rawTitle = titleMatch[2];
+			const titleLinkMatch = /\[(\d+)\]/.exec(rawTitle);
+
+			acc = {
+				title: stripLinkMarkers(rawTitle.trim()),
+				titleLinkNum: titleLinkMatch
+					? parseInt(titleLinkMatch[1], 10)
+					: null,
+				snippetLines: [],
+				domain: "",
+			};
+			state = ParseState.IN_RESULT;
 			continue;
 		}
+
+		if (state === ParseState.IDLE) continue;
+
+		// We are inside a result block
+		if (!acc) continue;
+
+		// Page navigation markers end the current result
+		if (/^(Next Page|< Previous Page)/.test(trimmed)) {
+			flushAccumulator();
+			state = ParseState.IDLE;
+			continue;
+		}
+
+		// Empty line — could be between snippet and domain
+		if (!trimmed) continue;
+
+		// Domain line: looks like a URL/domain, no spaces, appears after title
 		if (
-			/^[a-z0-9.-]+\.[a-z]{2,}(\/\S*)?$/.test(trimmed) &&
+			/^[a-z0-9.-]+\.[a-z]{2,}(\/\S*)?$/
+				.test(trimmed) &&
 			!/\s/.test(trimmed)
 		) {
-			domain = trimmed;
-			i++;
-			break;
+			acc.domain = trimmed;
+			flushAccumulator();
+			state = ParseState.IDLE;
+			continue;
 		}
-		snippetLines.push(stripLinkMarkers(trimmed));
-		i++;
+
+		// Anything else is a snippet line
+		acc.snippetLines.push(stripLinkMarkers(trimmed));
 	}
 
-	let url = "";
-	if (resultLinkNum !== null && links.has(resultLinkNum)) {
-		url = resolveDdgRedirect(links.get(resultLinkNum) ?? "");
+	// Flush any remaining result
+	if (state === ParseState.IN_RESULT && acc) {
+		flushAccumulator();
 	}
 
-	return {
-		result: title
-			? { title, snippet: snippetLines.join(" "), domain, url }
-			: null,
-		nextIdx: i,
-	};
+	return results;
 }
 
 export function parseSearchResults(
@@ -256,19 +376,12 @@ export function parseSearchResults(
 ): ParsedSearch {
 	const links = parseLinks(raw);
 	const lines = raw.split("\n");
-	const results: SearchResult[] = [];
 	const instantAnswer = extractInstantAnswer(lines);
 
-	let i = 0;
-	while (i < lines.length && results.length < maxResults) {
-		const { result, nextIdx } = parseResultBlock(lines, i, links);
-		if (result) results.push(result);
-		i = nextIdx;
-	}
+	const results = parseResultBlocks(lines, links, maxResults);
 
 	return { instantAnswer, results };
 }
-
 export function buildDdgLiteUrl(query: string, siteFilter?: string): string {
 	const q = query.trim() + (siteFilter ? ` ${siteFilter}` : "");
 	return `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q)}`;
@@ -300,24 +413,36 @@ export function formatSearchResults(
 	return parts.join("\n");
 }
 
-export async function doSearch(
+export function normalizeSearchQuery(
 	query: string,
-	maxResults: number,
 	siteFilter?: string,
-): Promise<ParsedSearch> {
+): { cleanQuery: string; effectiveFilter?: string } {
 	let cleanQuery = query.trim();
 	let effectiveFilter = siteFilter;
 
 	if (/^!gh\s+/i.test(cleanQuery)) {
 		cleanQuery = cleanQuery.slice(4).trim();
-		effectiveFilter = "site:github.com";
+		effectiveFilter ??= "site:github.com";
 	} else if (/^!w\s+/i.test(cleanQuery)) {
 		cleanQuery = cleanQuery.slice(3).trim();
-		effectiveFilter = "site:wikipedia.org";
+		effectiveFilter ??= "site:wikipedia.org";
 	}
 
+	return { cleanQuery, effectiveFilter };
+}
+
+export async function doSearch(
+	query: string,
+	maxResults: number,
+	siteFilter?: string,
+	signal?: AbortSignal,
+): Promise<ParsedSearch> {
+	const { cleanQuery, effectiveFilter } = normalizeSearchQuery(query, siteFilter);
+	if (isSiteFilteredSearch(effectiveFilter)) {
+		await waitForSiteSearchSlot(signal);
+	}
 	const url = buildDdgLiteUrl(cleanQuery, effectiveFilter);
-	const raw = await lynxDump(url);
+	const raw = await lynxDump(url, 15_000, signal);
 	return parseSearchResults(raw, maxResults);
 }
 
@@ -365,7 +490,7 @@ function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 						),
 					}),
 		}),
-		async execute(_toolCallId, params, _signal, onUpdate) {
+		async execute(_toolCallId, params, signal, onUpdate) {
 			const maxResults = Math.min(Math.max(params.max_results ?? 8, 1), 20);
 
 			let siteFilter = config.siteFilter;
@@ -383,7 +508,7 @@ function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 			});
 
 			try {
-				const parsed = await doSearch(params.query, maxResults, siteFilter);
+				const parsed = await doSearch(params.query, maxResults, siteFilter, signal);
 				const text = formatSearchResults(params.query, parsed);
 
 				return {
@@ -400,8 +525,14 @@ function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 			} catch (err: unknown) {
 				const message = err instanceof Error ? err.message : String(err);
 				const errorPrefix = config.errorPrefix ?? "Search failed";
+				const normalized = normalizeSearchQuery(params.query, siteFilter);
+				const retryHint = isSiteFilteredSearch(normalized.effectiveFilter)
+					? ` DDG Lite often throttles repeated site-filtered searches; retry after ${SITE_SEARCH_MIN_INTERVAL_MS}ms or try a general search without the site filter.`
+					: "";
 				return {
-					content: [{ type: "text", text: `${errorPrefix}: ${message}` }],
+					content: [
+						{ type: "text", text: `${errorPrefix}: ${message}${retryHint}` },
+					],
 					isError: true,
 					details: { query: params.query, error: message },
 				};
@@ -445,7 +576,7 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 				}),
 			),
 		}),
-		async execute(_toolCallId, params, _signal, onUpdate) {
+		async execute(_toolCallId, params, signal, onUpdate) {
 			const maxLines = Math.min(Math.max(params.max_lines ?? 300, 50), 2000);
 			const includeLinks = params.include_links ?? true;
 
@@ -455,7 +586,7 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 			});
 
 			try {
-				const result = await doFetch(params.url, maxLines, includeLinks);
+				const result = await doFetch(params.url, maxLines, includeLinks, signal);
 
 				return {
 					content: [{ type: "text", text: result.text }],

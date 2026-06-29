@@ -22,7 +22,7 @@ Then reload or restart pi:
 ### Alternative: install from git
 
 ```bash
-pi install git:github.com/dabito/pi-lynx@v1.0.2
+pi install git:github.com/dabito/pi-lynx
 ```
 
 ### Alternative: install from source
@@ -74,6 +74,8 @@ Shortcuts:
 - `!gh <query>` or `site: "github"` → restricts to GitHub
 - `!w <query>` or `site: "wikipedia"` → restricts to Wikipedia
 
+If both a bang shortcut and an explicit site filter are provided, the explicit filter wins. For example, `query: "!gh rust", site: "wikipedia"` searches Wikipedia for `rust`.
+
 ### `lynx_web_search_github`
 
 Search GitHub using DuckDuckGo Lite. Convenience wrapper around `lynx_web_search` with `site:github.com` pre-set.
@@ -92,11 +94,27 @@ Search Wikipedia using DuckDuckGo Lite. Convenience wrapper around `lynx_web_sea
 | `query`       | string | ✓        | —       | Search query                 |
 | `max_results` | number |          | 8       | Max results to return (1–20) |
 
+## Configuration catalog
+
+| Variable | Default | Min | Description |
+| -------- | ------- | --- | ----------- |
+| `PI_LYNX_SITE_SEARCH_INTERVAL_MS` | `3000` | `1000` | Minimum spacing between DDG Lite `site:` searches. Use `4000` or higher if DuckDuckGo throttles repeated GitHub/Wikipedia searches. |
+
+## Command catalog
+
+| Command | Purpose |
+| ------- | ------- |
+| `npm test` | Run fixture-based unit tests. Live DDG search stays skipped by default. |
+| `PI_LYNX_INTEGRATION=1 npm test` | Run live DDG Lite integration tests. May throttle repeated `site:` searches. |
+| `npm run typecheck` | Run strict TypeScript checking. |
+| `npm run lint` | Run ESLint. |
+| `npm pack --dry-run` | Preview publish tarball contents. |
+
 ## Notes on DuckDuckGo Lite
 
 Raw DDG bangs such as `!gh` and `!w` redirect away from DDG Lite, so pi-lynx converts them to `site:` filters before searching.
 
-DuckDuckGo Lite can temporarily rate-limit repeated `site:` searches. If GitHub/Wikipedia searches return a DDG error page during testing, wait a bit and retry.
+DuckDuckGo Lite can temporarily rate-limit repeated `site:` searches. pi-lynx spaces site-filtered searches by at least 3 seconds by default; tune with `PI_LYNX_SITE_SEARCH_INTERVAL_MS`. If GitHub/Wikipedia searches fail during testing, retry after the configured interval or use a general search without `site:`.
 
 ## How it works
 

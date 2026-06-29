@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.0.4] - 2026-06-28
+
+### Fixed
+
+- Removed duplicate search parser definitions that broke TypeScript builds.
+- Kept `!gh`/`!w` shortcuts while making explicit `site` filters take precedence.
+- Moved `typebox` to runtime dependencies for package installs.
+- Passed cancellation signals through `lynx` execution.
+
+### Added
+
+- Serialized pacing for repeated DDG Lite `site:` searches.
+- `PI_LYNX_SITE_SEARCH_INTERVAL_MS` env override for site-search pacing.
+- README configuration and command catalog.
+- `npm run lint` script.
+
 ## [1.0.0] - 2026-06-20
 
 ### Added

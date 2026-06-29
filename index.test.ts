@@ -21,6 +21,8 @@ import {
 	buildDdgLiteUrl,
 	parseSearchResults,
 	formatSearchResults,
+	normalizeSearchQuery,
+	getSiteSearchMinIntervalMs,
 } from "./index.ts";
 
 // ── Fixtures ──────────────────────────────────────────────────────────
@@ -145,6 +147,54 @@ describe("buildDdgLiteUrl", () => {
 		const url = buildDdgLiteUrl("c++ programming");
 		assert.ok(url.includes("c%2B%2B"));
 	});
+});
+
+// ── Unit tests: normalizeSearchQuery ──────────────────────────────────
+
+describe("normalizeSearchQuery", () => {
+	it("converts !gh bang to a GitHub site filter", () => {
+		assert.deepEqual(normalizeSearchQuery("!gh pi extension"), {
+			cleanQuery: "pi extension",
+			effectiveFilter: "site:github.com",
+		});
+	});
+
+	it("converts !w bang to a Wikipedia site filter", () => {
+		assert.deepEqual(normalizeSearchQuery("!w rust language"), {
+			cleanQuery: "rust language",
+			effectiveFilter: "site:wikipedia.org",
+		});
+	});
+
+	it("lets an explicit site filter take precedence over a bang", () => {
+		assert.deepEqual(
+			normalizeSearchQuery("!gh rust language", "site:wikipedia.org"),
+			{
+				cleanQuery: "rust language",
+				effectiveFilter: "site:wikipedia.org",
+			},
+		);
+	});
+
+// ── Unit tests: getSiteSearchMinIntervalMs ──────────────────────────────
+
+describe("getSiteSearchMinIntervalMs", () => {
+	it("uses the default interval when unset", () => {
+		assert.equal(getSiteSearchMinIntervalMs(undefined), 3000);
+	});
+
+	it("clamps too-small values to the minimum", () => {
+		assert.equal(getSiteSearchMinIntervalMs("250"), 1000);
+	});
+
+	it("uses valid custom intervals", () => {
+		assert.equal(getSiteSearchMinIntervalMs("4000"), 4000);
+	});
+
+	it("falls back to default for invalid values", () => {
+		assert.equal(getSiteSearchMinIntervalMs("nope"), 3000);
+	});
+});
 });
 
 // ── Unit tests: parseSearchResults ────────────────────────────────────

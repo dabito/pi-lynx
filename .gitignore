@@ -1,6 +1,7 @@
 node_modules/
 *.tsbuildinfo
 .pi-lens/
+.pi/
 coverage/
 dist/
 .DS_Store
