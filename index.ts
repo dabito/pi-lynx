@@ -1,452 +1,39 @@
 /**
  * pi-lynx: Web Search & Fetch via Lynx + DuckDuckGo Lite
  *
- * Provides four tools for agents:
- * - lynx_web_fetch:    Fetch and extract text content + links from any URL (base tool)
- * - lynx_web_search:   Search the web via DuckDuckGo Lite (uses lynx_web_fetch internally)
- * - lynx_web_search_github:    Search GitHub via DuckDuckGo Lite (uses lynx_web_search)
- * - lynx_web_search_wikipedia: Search Wikipedia via DuckDuckGo Lite (uses lynx_web_search)
- *
- * Tool composition hierarchy:
- *   lynx_web_fetch (base — lynx -dump + parse)
- *     ↑ used by
- *   lynx_web_search (DDG Lite URL construction + result parsing)
- *     ↑ used by
- *   lynx_web_search_github / lynx_web_search_wikipedia (site-specific wrappers)
- *
- * One runtime dependency (`typebox`) plus `lynx` on PATH.
+ * Tools:
+ * - lynx_web_fetch: fetch + extract text from URL
+ * - lynx_web_search: search via DDG Lite
+ * - lynx_web_search_github: GitHub wrapper
+ * - lynx_web_search_wikipedia: Wikipedia wrapper
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 
-const execFileAsync = promisify(execFile);
-
-// ── Shared helpers (used by all tools) ────────────────────────────────
-
-let _lynxPath: string | null | undefined;
-
-async function findLynx(): Promise<string | null> {
-	if (_lynxPath !== undefined) return _lynxPath;
-	try {
-		const { execSync } = await import("node:child_process");
-		const p = execSync("which lynx 2>/dev/null", { encoding: "utf8" }).trim();
-		_lynxPath = p || null;
-		return _lynxPath ?? null;
-	} catch {
-		_lynxPath = null;
-		return null;
-	}
-}
-
-async function lynxDump(
-	url: string,
-	timeoutMs = 15_000,
-	signal?: AbortSignal,
-): Promise<string> {
-	const lynxPath = await findLynx();
-	if (!lynxPath) throw new Error("lynx not found on PATH. Install lynx first.");
-
-	// NOTE: intentionally NOT using -nolist so we get the References section with all URLs
-	// Using default Lynx UA — custom UAs trigger DDG bot detection
-	const { stdout } = await execFileAsync(
-		lynxPath,
-		["-dump", "-assume_charset=UTF-8", "-display_charset=UTF-8", url],
-		{ timeout: timeoutMs, maxBuffer: 2 * 1024 * 1024, signal },
-	);
-
-	return stdout;
-}
-
-const DEFAULT_SITE_SEARCH_MIN_INTERVAL_MS = 3000;
-const MIN_SITE_SEARCH_MIN_INTERVAL_MS = 1000;
-
-export function getSiteSearchMinIntervalMs(value?: string): number {
-	if (!value) return DEFAULT_SITE_SEARCH_MIN_INTERVAL_MS;
-
-	const parsed = Number.parseInt(value, 10);
-	if (!Number.isFinite(parsed)) return DEFAULT_SITE_SEARCH_MIN_INTERVAL_MS;
-
-	return Math.max(MIN_SITE_SEARCH_MIN_INTERVAL_MS, parsed);
-}
-
-const SITE_SEARCH_MIN_INTERVAL_MS = getSiteSearchMinIntervalMs(
-	typeof process !== "undefined"
-		? process.env.PI_LYNX_SITE_SEARCH_INTERVAL_MS
-		: undefined,
-);
-let lastSiteSearchAt = 0;
-let siteSearchQueue: Promise<void> = Promise.resolve();
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-	if (ms <= 0) return Promise.resolve();
-	if (signal?.aborted) return Promise.reject(new Error("Search cancelled."));
-
-	return new Promise((resolve, reject) => {
-		const timeout = setTimeout(cleanupAndResolve, ms);
-
-		function cleanupAndResolve(): void {
-			signal?.removeEventListener("abort", cleanupAndReject);
-			resolve();
-		}
-
-		function cleanupAndReject(): void {
-			clearTimeout(timeout);
-			reject(new Error("Search cancelled."));
-		}
-
-		signal?.addEventListener("abort", cleanupAndReject, { once: true });
-	});
-}
-
-async function waitForSiteSearchSlot(signal?: AbortSignal): Promise<void> {
-	const run = siteSearchQueue.catch(() => undefined).then(async () => {
-		const waitMs = Math.max(
-			0,
-			lastSiteSearchAt + SITE_SEARCH_MIN_INTERVAL_MS - Date.now(),
-		);
-		await sleep(waitMs, signal);
-		lastSiteSearchAt = Date.now();
-	});
-
-	siteSearchQueue = run.catch(() => undefined);
-	await run;
-}
-
-function isSiteFilteredSearch(siteFilter?: string): boolean {
-	return Boolean(siteFilter?.startsWith("site:"));
-}
-
-/** Extract the [N] → URL mapping from lynx's References section */
-export function parseLinks(raw: string): Map<number, string> {
-	const links = new Map<number, string>();
-	const lines = raw.split("\n");
-
-	let inRefs = false;
-	for (const line of lines) {
-		const trimmed = line.trim();
-
-		if (
-			/^References$/.test(trimmed) ||
-			/^Visible links:$/.test(trimmed) ||
-			/^Hidden links:$/.test(trimmed)
-		) {
-			inRefs = true;
-			continue;
-		}
-
-		if (!inRefs) continue;
-
-		const match = /^\s*(\d+)\.\s+(https?:\/\/\S+)/.exec(trimmed);
-		if (match) {
-			links.set(parseInt(match[1], 10), match[2]);
-		}
-	}
-
-	return links;
-}
-
-/** Resolve a DDG redirect URL to the actual target URL */
-export function resolveDdgRedirect(url: string): string {
-	try {
-		const u = new URL(url);
-		if (u.hostname === "duckduckgo.com" && u.pathname === "/l/") {
-			const uddg = u.searchParams.get("uddg");
-			if (uddg) return decodeURIComponent(uddg);
-		}
-	} catch {
-		/* not a valid URL, return as-is */
-	}
-	return url;
-}
-
-/** Strip [N] link markers from text */
-export function stripLinkMarkers(text: string): string {
-	return text.replace(/\[(\d+)\]/g, "");
-}
-
-// ── lynx_web_fetch internals (base layer) ─────────────────────────────
-
-interface FetchResult {
-	text: string;
-	lineCount: number;
-	linkCount: number;
-	truncated: boolean;
-}
-
-async function doFetch(
-	url: string,
-	maxLines: number,
-	includeLinks: boolean,
-	signal?: AbortSignal,
-): Promise<FetchResult> {
-	const raw = await lynxDump(url, 15_000, signal);
-	const links = parseLinks(raw);
-	const lines = raw.split("\n");
-
-	const refsStart = lines.findIndex(
-		(l) => /^References$/.test(l.trim()) || /^Visible links:$/.test(l.trim()),
-	);
-
-	const bodyEnd = refsStart !== -1 ? refsStart : lines.length;
-	const bodyLines = lines.slice(0, bodyEnd);
-	const cleanBody = bodyLines.map(stripLinkMarkers);
-
-	let start = 0;
-	for (let i = 0; i < Math.min(10, cleanBody.length); i++) {
-		const t = cleanBody[i].trim();
-		if (
-			t &&
-			!/^#?\s*$/.test(t) &&
-			!/^(Jump to|Skip|Menu|Navigation)/i.test(t)
-		) {
-			start = i;
-			break;
-		}
-	}
-
-	const content = cleanBody.slice(start, start + maxLines).join("\n");
-	const truncated = cleanBody.length - start > maxLines;
-
-	let text = truncated
-		? `${content}\n\n--- [truncated at ${maxLines} lines, ${cleanBody.length - start - maxLines} more lines omitted] ---`
-		: content;
-
-	if (includeLinks && links.size > 0) {
-		const linkEntries = Array.from(links.entries())
-			.sort(([a], [b]) => a - b)
-			.map(([num, href]) => `  [${num}] ${resolveDdgRedirect(href)}`);
-
-		text += `\n\n## Links (${links.size})\n${linkEntries.join("\n")}`;
-	}
-
-	return {
-		text,
-		lineCount: bodyLines.length,
-		linkCount: links.size,
-		truncated,
-	};
-}
-
-// ── lynx_web_search internals ─────────────────────────────────────────
-
-export interface SearchResult {
-	title: string;
-	snippet: string;
-	domain: string;
-	url: string;
-}
-
-export interface ParsedSearch {
-	instantAnswer: string | null;
-	results: SearchResult[];
-}
-
-/** Extract the instant answer from DDG Lite "Zero-click info:" section */
-function extractInstantAnswer(lines: string[]): string | null {
-	const zcIdx = lines.findIndex((l) => /Zero-click info:/i.test(l));
-	if (zcIdx === -1) return null;
-
-	const zcLines: string[] = [];
-	for (let i = zcIdx + 1; i < lines.length; i++) {
-		if (/^\s*\d+\.\s/.test(lines[i])) break;
-		const trimmed = stripLinkMarkers(lines[i].trim());
-		if (trimmed && !/^More at/.test(trimmed)) zcLines.push(trimmed);
-	}
-
-	return zcLines.length > 0 ? zcLines.join(" ") : null;
-}
-
-/** State-machine based parser for DDG Lite search result blocks */
-const enum ParseState {
-	IDLE = "idle",
-	IN_RESULT = "in_result",
-}
-
-interface ResultAccumulator {
-	title: string;
-	titleLinkNum: number | null;
-	snippetLines: string[];
-	domain: string;
-}
-
-function parseResultBlocks(
-	lines: string[],
-	links: Map<number, string>,
-	maxResults: number,
-): SearchResult[] {
-	const results: SearchResult[] = [];
-	let state: ParseState = ParseState.IDLE;
-	let acc: ResultAccumulator | null = null;
-
-	function flushAccumulator(): void {
-		if (!acc || !acc.title) return;
-
-		let url = "";
-		if (acc.titleLinkNum !== null && links.has(acc.titleLinkNum)) {
-			url = resolveDdgRedirect(links.get(acc.titleLinkNum) ?? "");
-		}
-
-		results.push({
-			title: acc.title,
-			snippet: acc.snippetLines.join(" "),
-			domain: acc.domain,
-			url,
-		});
-		acc = null;
-	}
-
-	for (let i = 0; i < lines.length; i++) {
-		if (results.length >= maxResults) break;
-
-		const line = lines[i];
-		const trimmed = line.trim();
-
-		// Detect result start: "  N.  Title" (numbered line with title)
-		const titleMatch = /^\s*(\d+)\.\s{2,}(.+)/.exec(line);
-
-		if (titleMatch) {
-			// If we were in a result, flush it
-			if (state === ParseState.IN_RESULT) {
-				flushAccumulator();
-			}
-
-			if (results.length >= maxResults) break;
-
-			// Start a new result
-			const rawTitle = titleMatch[2];
-			const titleLinkMatch = /\[(\d+)\]/.exec(rawTitle);
-
-			acc = {
-				title: stripLinkMarkers(rawTitle.trim()),
-				titleLinkNum: titleLinkMatch
-					? parseInt(titleLinkMatch[1], 10)
-					: null,
-				snippetLines: [],
-				domain: "",
-			};
-			state = ParseState.IN_RESULT;
-			continue;
-		}
-
-		if (state === ParseState.IDLE) continue;
-
-		// We are inside a result block
-		if (!acc) continue;
-
-		// Page navigation markers end the current result
-		if (/^(Next Page|< Previous Page)/.test(trimmed)) {
-			flushAccumulator();
-			state = ParseState.IDLE;
-			continue;
-		}
-
-		// Empty line — could be between snippet and domain
-		if (!trimmed) continue;
-
-		// Domain line: looks like a URL/domain, no spaces, appears after title
-		if (
-			/^[a-z0-9.-]+\.[a-z]{2,}(\/\S*)?$/
-				.test(trimmed) &&
-			!/\s/.test(trimmed)
-		) {
-			acc.domain = trimmed;
-			flushAccumulator();
-			state = ParseState.IDLE;
-			continue;
-		}
-
-		// Anything else is a snippet line
-		acc.snippetLines.push(stripLinkMarkers(trimmed));
-	}
-
-	// Flush any remaining result
-	if (state === ParseState.IN_RESULT && acc) {
-		flushAccumulator();
-	}
-
-	return results;
-}
-
-export function parseSearchResults(
-	raw: string,
-	maxResults: number,
-): ParsedSearch {
-	const links = parseLinks(raw);
-	const lines = raw.split("\n");
-	const instantAnswer = extractInstantAnswer(lines);
-
-	const results = parseResultBlocks(lines, links, maxResults);
-
-	return { instantAnswer, results };
-}
-export function buildDdgLiteUrl(query: string, siteFilter?: string): string {
-	const q = query.trim() + (siteFilter ? ` ${siteFilter}` : "");
-	return `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q)}`;
-}
-
-export function formatSearchResults(
-	query: string,
-	parsed: ParsedSearch,
-): string {
-	const { instantAnswer, results } = parsed;
-
-	if (results.length === 0 && !instantAnswer) {
-		return `No results found for "${query}".`;
-	}
-
-	const parts: string[] = [];
-	if (instantAnswer) {
-		parts.push(`## Instant Answer\n${instantAnswer}\n`);
-	}
-	parts.push(`## Results (${results.length})\n`);
-	for (const [idx, r] of results.entries()) {
-		parts.push(`${idx + 1}. **${r.title}**`);
-		if (r.url) parts.push(`   URL: ${r.url}`);
-		if (r.domain && !r.url) parts.push(`   Domain: ${r.domain}`);
-		if (r.snippet) parts.push(`   ${r.snippet}`);
-		parts.push("");
-	}
-
-	return parts.join("\n");
-}
-
-export function normalizeSearchQuery(
-	query: string,
-	siteFilter?: string,
-): { cleanQuery: string; effectiveFilter?: string } {
-	let cleanQuery = query.trim();
-	let effectiveFilter = siteFilter;
-
-	if (/^!gh\s+/i.test(cleanQuery)) {
-		cleanQuery = cleanQuery.slice(4).trim();
-		effectiveFilter ??= "site:github.com";
-	} else if (/^!w\s+/i.test(cleanQuery)) {
-		cleanQuery = cleanQuery.slice(3).trim();
-		effectiveFilter ??= "site:wikipedia.org";
-	}
-
-	return { cleanQuery, effectiveFilter };
-}
-
-export async function doSearch(
-	query: string,
-	maxResults: number,
-	siteFilter?: string,
-	signal?: AbortSignal,
-): Promise<ParsedSearch> {
-	const { cleanQuery, effectiveFilter } = normalizeSearchQuery(query, siteFilter);
-	if (isSiteFilteredSearch(effectiveFilter)) {
-		await waitForSiteSearchSlot(signal);
-	}
-	const url = buildDdgLiteUrl(cleanQuery, effectiveFilter);
-	const raw = await lynxDump(url, 15_000, signal);
-	return parseSearchResults(raw, maxResults);
-}
-
-// ── Tool registration helpers ─────────────────────────────────────────
+import {
+	buildDdgLiteUrl,
+	formatSearchResults,
+	normalizeSearchQuery,
+	parseLinks,
+	parseSearchResults,
+	resolveDdgRedirect,
+	stripLinkMarkers,
+} from "./core.ts";
+import { doFetch, doSearch, getSiteSearchMinIntervalMs } from "./runtime.ts";
+
+export {
+	buildDdgLiteUrl,
+	formatSearchResults,
+	normalizeSearchQuery,
+	parseLinks,
+	parseSearchResults,
+	resolveDdgRedirect,
+	stripLinkMarkers,
+	doFetch,
+	doSearch,
+	getSiteSearchMinIntervalMs,
+};
 
 interface SearchToolConfig {
 	name: string;
@@ -455,9 +42,7 @@ interface SearchToolConfig {
 	promptSnippet: string;
 	promptGuidelines: string[];
 	siteFilter?: string;
-	/** Label prefix shown in onUpdate messages, e.g. "Searching GitHub" */
 	contextLabel?: string;
-	/** Error prefix shown on failure, e.g. "GitHub search failed" */
 	errorPrefix?: string;
 }
 
@@ -501,9 +86,7 @@ function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 
 			const contextLabel = config.contextLabel ?? "Searching";
 			onUpdate?.({
-				content: [
-					{ type: "text", text: `${contextLabel}: "${params.query}"...` },
-				],
+				content: [{ type: "text", text: `${contextLabel}: "${params.query}"...` }],
 				details: undefined,
 			});
 
@@ -517,22 +100,18 @@ function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 						query: params.query,
 						resultCount: parsed.results.length,
 						hasInstantAnswer: parsed.instantAnswer !== null,
-						...(config.siteFilter
-							? { site: config.siteFilter.replace("site:", "") }
-							: {}),
+						...(config.siteFilter ? { site: config.siteFilter.replace("site:", "") } : {}),
 					},
 				};
 			} catch (err: unknown) {
 				const message = err instanceof Error ? err.message : String(err);
 				const errorPrefix = config.errorPrefix ?? "Search failed";
 				const normalized = normalizeSearchQuery(params.query, siteFilter);
-				const retryHint = isSiteFilteredSearch(normalized.effectiveFilter)
-					? ` DDG Lite often throttles repeated site-filtered searches; retry after ${SITE_SEARCH_MIN_INTERVAL_MS}ms or try a general search without the site filter.`
+				const retryHint = (normalized.effectiveFilter?.startsWith("site:"))
+					? ` DDG Lite often throttles repeated site-filtered searches; retry after ${getSiteSearchMinIntervalMs(process.env.PI_LYNX_SITE_SEARCH_INTERVAL_MS)}ms or try a general search without the site filter.`
 					: "";
 				return {
-					content: [
-						{ type: "text", text: `${errorPrefix}: ${message}${retryHint}` },
-					],
+					content: [{ type: "text", text: `${errorPrefix}: ${message}${retryHint}` }],
 					isError: true,
 					details: { query: params.query, error: message },
 				};
@@ -541,28 +120,24 @@ function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 	});
 }
 
-// ── Extension: register tools ─────────────────────────────────────────
-
 export default function lynxDdgSearch(pi: ExtensionAPI) {
-	// ── 1. lynx_web_fetch (base tool) ──
-
 	pi.registerTool({
 		name: "lynx_web_fetch",
 		label: "Lynx Web Fetch",
 		description:
-			"Fetch a web page and extract its text content and links using lynx. Useful for reading articles, documentation, or any URL found via lynx_web_search. Returns page text with a Links section listing all extracted URLs.",
+			"Fetch a web page and extract its text content using lynx. Links are opt-in and capped by default so fetches stay context-safe. Useful for reading articles, documentation, or any URL found via lynx_web_search.",
 		promptSnippet: "Fetch and read the text content of a web page via lynx",
 		promptGuidelines: [
 			"Use lynx_web_fetch to read the full content of a URL returned by lynx_web_search or provided by the user.",
-			"lynx_web_fetch returns plain text plus a Links section with all URLs found on the page.",
-			"For very long pages, the output may be truncated but the Links section is always included.",
+			"The default output is body text only. Add include_links=true only when link references matter.",
+			"If you include links, keep them bounded with link_limit.",
+			"For very long pages, the output may be truncated.",
 		],
 		parameters: Type.Object({
 			url: Type.String({ description: "URL to fetch" }),
 			max_lines: Type.Optional(
 				Type.Number({
-					description:
-						"Maximum lines of text to return (default 300, excludes Links section)",
+					description: "Maximum lines of text to return (default 300)",
 					default: 300,
 					minimum: 50,
 					maximum: 2000,
@@ -570,15 +145,23 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 			),
 			include_links: Type.Optional(
 				Type.Boolean({
-					description:
-						"Include extracted links section at the end (default true)",
-					default: true,
+					description: "Include extracted links section at the end (default false)",
+					default: false,
+				}),
+			),
+			link_limit: Type.Optional(
+				Type.Number({
+					description: "Maximum number of links to include when include_links=true (default 20)",
+					default: 20,
+					minimum: 0,
+					maximum: 200,
 				}),
 			),
 		}),
 		async execute(_toolCallId, params, signal, onUpdate) {
 			const maxLines = Math.min(Math.max(params.max_lines ?? 300, 50), 2000);
-			const includeLinks = params.include_links ?? true;
+			const includeLinks = params.include_links ?? false;
+			const linkLimit = Math.min(Math.max(params.link_limit ?? 20, 0), 200);
 
 			onUpdate?.({
 				content: [{ type: "text", text: `Fetching: ${params.url}...` }],
@@ -586,7 +169,7 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 			});
 
 			try {
-				const result = await doFetch(params.url, maxLines, includeLinks, signal);
+				const result = await doFetch(params.url, maxLines, includeLinks, linkLimit, signal);
 
 				return {
 					content: [{ type: "text", text: result.text }],
@@ -594,6 +177,7 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 						url: params.url,
 						lineCount: result.lineCount,
 						linkCount: result.linkCount,
+						linksTruncated: result.linksTruncated,
 						truncated: result.truncated,
 					},
 				};
@@ -608,8 +192,6 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 		},
 	});
 
-	// ── 2. lynx_web_search (general search, supports site param) ──
-
 	registerSearchTool(pi, {
 		name: "lynx_web_search",
 		label: "Lynx Web Search",
@@ -623,8 +205,6 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 			"Supports !gh (GitHub) and !w (Wikipedia) bang shortcuts, or use the site parameter.",
 		],
 	});
-
-	// ── 3. lynx_web_search_github ──
 
 	registerSearchTool(pi, {
 		name: "lynx_web_search_github",
@@ -641,8 +221,6 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 		contextLabel: "Searching GitHub",
 		errorPrefix: "GitHub search failed",
 	});
-
-	// ── 4. lynx_web_search_wikipedia ──
 
 	registerSearchTool(pi, {
 		name: "lynx_web_search_wikipedia",

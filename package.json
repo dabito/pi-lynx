@@ -1,6 +1,6 @@
 {
   "name": "pi-lynx",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Pi extension for web search and page fetch via lynx + DuckDuckGo Lite. Terminal browser, web scrape, and search tools with zero API keys.",
   "type": "module",
   "main": "index.ts",
@@ -23,7 +23,7 @@
     "no-api-keys"
   ],
   "scripts": {
-    "test": "npx tsx index.test.ts",
+    "test": "npx tsx index.test.ts && npx tsx tool-contract.test.ts",
     "build": "npm run typecheck",
     "typecheck": "tsc --noEmit --strict --skipLibCheck",
     "lint": "eslint ."
@@ -44,6 +44,9 @@
   },
   "files": [
     "index.ts",
+    "core.ts",
+    "runtime.ts",
+    "tool-contract.test.ts",
     "test/fixtures/",
     "README.md",
     "CHANGELOG.md",
@@ -58,6 +61,10 @@
     "type": "git",
     "url": "git+https://github.com/dabito/pi-lynx.git"
   },
+  "bugs": {
+    "url": "https://github.com/dabito/pi-lynx/issues"
+  },
+  "homepage": "https://github.com/dabito/pi-lynx#readme",
   "publishConfig": {
     "access": "public"
   },

@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.5] - 2026-06-29
+
+### Changed
+
+- Split implementation into `core.ts`, `runtime.ts`, and `index.ts`.
+- Made `lynx_web_fetch` context-safe by default: links opt-in, capped by `link_limit`.
+- Added README quick start, behavior notes, failure modes, and related packages.
+- Added tool-contract tests for registered tool names and fetch defaults.
+- Added `bugs` and `homepage` metadata.
+
 ## [1.0.4] - 2026-06-28
 
 ### Fixed

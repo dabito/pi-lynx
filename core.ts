@@ -1,0 +1,235 @@
+/**
+ * Pure pi-lynx helpers.
+ */
+
+/** Extract the [N] → URL mapping from lynx's References section */
+export function parseLinks(raw: string): Map<number, string> {
+	const links = new Map<number, string>();
+	const lines = raw.split("\n");
+
+	let inRefs = false;
+	for (const line of lines) {
+		const trimmed = line.trim();
+
+		if (
+			/^References$/.test(trimmed) ||
+			/^Visible links:$/.test(trimmed) ||
+			/^Hidden links:$/.test(trimmed)
+		) {
+			inRefs = true;
+			continue;
+		}
+
+		if (!inRefs) continue;
+
+		const match = /^\s*(\d+)\.\s+(https?:\/\/\S+)/.exec(trimmed);
+		if (match) {
+			links.set(parseInt(match[1], 10), match[2]);
+		}
+	}
+
+	return links;
+}
+
+/** Resolve a DDG redirect URL to the actual target URL */
+export function resolveDdgRedirect(url: string): string {
+	try {
+		const u = new URL(url);
+		if (u.hostname === "duckduckgo.com" && u.pathname === "/l/") {
+			const uddg = u.searchParams.get("uddg");
+			if (uddg) return decodeURIComponent(uddg);
+		}
+	} catch {
+		/* not a valid URL, return as-is */
+	}
+	return url;
+}
+
+/** Strip [N] link markers from text */
+export function stripLinkMarkers(text: string): string {
+	return text.replace(/\[(\d+)\]/g, "");
+}
+
+export interface SearchResult {
+	title: string;
+	snippet: string;
+	domain: string;
+	url: string;
+}
+
+export interface ParsedSearch {
+	instantAnswer: string | null;
+	results: SearchResult[];
+}
+
+/** Extract the instant answer from DDG Lite "Zero-click info:" section */
+function extractInstantAnswer(lines: string[]): string | null {
+	const zcIdx = lines.findIndex((l) => /Zero-click info:/i.test(l));
+	if (zcIdx === -1) return null;
+
+	const zcLines: string[] = [];
+	for (let i = zcIdx + 1; i < lines.length; i++) {
+		if (/^\s*\d+\.\s/.test(lines[i])) break;
+		const trimmed = stripLinkMarkers(lines[i].trim());
+		if (trimmed && !/^More at/.test(trimmed)) zcLines.push(trimmed);
+	}
+
+	return zcLines.length > 0 ? zcLines.join(" ") : null;
+}
+
+/** State-machine based parser for DDG Lite search result blocks */
+const enum ParseState {
+	IDLE = "idle",
+	IN_RESULT = "in_result",
+}
+
+interface ResultAccumulator {
+	title: string;
+	titleLinkNum: number | null;
+	snippetLines: string[];
+	domain: string;
+}
+
+function parseResultBlocks(
+	lines: string[],
+	links: Map<number, string>,
+	maxResults: number,
+): SearchResult[] {
+	const results: SearchResult[] = [];
+	let state: ParseState = ParseState.IDLE;
+	let acc: ResultAccumulator | null = null;
+
+	function flushAccumulator(): void {
+		if (!acc || !acc.title) return;
+
+		let url = "";
+		if (acc.titleLinkNum !== null && links.has(acc.titleLinkNum)) {
+			url = resolveDdgRedirect(links.get(acc.titleLinkNum) ?? "");
+		}
+
+		results.push({
+			title: acc.title,
+			snippet: acc.snippetLines.join(" "),
+			domain: acc.domain,
+			url,
+		});
+		acc = null;
+	}
+
+	for (let i = 0; i < lines.length; i++) {
+		if (results.length >= maxResults) break;
+
+		const line = lines[i];
+		const trimmed = line.trim();
+
+		const titleMatch = /^\s*(\d+)\.\s{2,}(.+)/.exec(line);
+
+		if (titleMatch) {
+			if (state === ParseState.IN_RESULT) {
+				flushAccumulator();
+			}
+
+			if (results.length >= maxResults) break;
+
+			const rawTitle = titleMatch[2];
+			const titleLinkMatch = /\[(\d+)\]/.exec(rawTitle);
+
+			acc = {
+				title: stripLinkMarkers(rawTitle.trim()),
+				titleLinkNum: titleLinkMatch ? parseInt(titleLinkMatch[1], 10) : null,
+				snippetLines: [],
+				domain: "",
+			};
+			state = ParseState.IN_RESULT;
+			continue;
+		}
+
+		if (state === ParseState.IDLE) continue;
+		if (!acc) continue;
+
+		if (/^(Next Page|< Previous Page)/.test(trimmed)) {
+			flushAccumulator();
+			state = ParseState.IDLE;
+			continue;
+		}
+
+		if (!trimmed) continue;
+
+		if (/^[a-z0-9.-]+\.[a-z]{2,}(\/\S*)?$/.test(trimmed) && !/\s/.test(trimmed)) {
+			acc.domain = trimmed;
+			flushAccumulator();
+			state = ParseState.IDLE;
+			continue;
+		}
+
+		acc.snippetLines.push(stripLinkMarkers(trimmed));
+	}
+
+	if (state === ParseState.IN_RESULT && acc) {
+		flushAccumulator();
+	}
+
+	return results;
+}
+
+export function parseSearchResults(
+	raw: string,
+	maxResults: number,
+): ParsedSearch {
+	const links = parseLinks(raw);
+	const lines = raw.split("\n");
+	const instantAnswer = extractInstantAnswer(lines);
+
+	const results = parseResultBlocks(lines, links, maxResults);
+
+	return { instantAnswer, results };
+}
+
+export function buildDdgLiteUrl(query: string, siteFilter?: string): string {
+	const q = query.trim() + (siteFilter ? ` ${siteFilter}` : "");
+	return `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(q)}`;
+}
+
+export function formatSearchResults(
+	query: string,
+	parsed: ParsedSearch,
+): string {
+	const { instantAnswer, results } = parsed;
+
+	if (results.length === 0 && !instantAnswer) {
+		return `No results found for "${query}".`;
+	}
+
+	const parts: string[] = [];
+	if (instantAnswer) {
+		parts.push(`## Instant Answer\n${instantAnswer}\n`);
+	}
+	parts.push(`## Results (${results.length})\n`);
+	for (const [idx, r] of results.entries()) {
+		parts.push(`${idx + 1}. **${r.title}**`);
+		if (r.url) parts.push(`   URL: ${r.url}`);
+		if (r.domain && !r.url) parts.push(`   Domain: ${r.domain}`);
+		if (r.snippet) parts.push(`   ${r.snippet}`);
+		parts.push("");
+	}
+
+	return parts.join("\n");
+}
+
+export function normalizeSearchQuery(
+	query: string,
+	siteFilter?: string,
+): { cleanQuery: string; effectiveFilter?: string } {
+	let cleanQuery = query.trim();
+	let effectiveFilter = siteFilter;
+
+	if (/^!gh\s+/i.test(cleanQuery)) {
+		cleanQuery = cleanQuery.slice(4).trim();
+		effectiveFilter ??= "site:github.com";
+	} else if (/^!w\s+/i.test(cleanQuery)) {
+		cleanQuery = cleanQuery.slice(3).trim();
+		effectiveFilter ??= "site:wikipedia.org";
+	}
+
+	return { cleanQuery, effectiveFilter };
+}
