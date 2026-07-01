@@ -1,6 +1,30 @@
 # pi-lynx
 
-Pi extension for web search and page fetch via lynx + DuckDuckGo Lite. Context-safe defaults: fetch body text first; links are opt-in.
+Give Pi agents plain-text web search and page fetch with no API keys, using your local `lynx` plus DuckDuckGo Lite. Body text first; links are opt-in and capped.
+
+[Install](#install) | [Quick start](#quick-start) | [Demo](#demo) | [Tools](#tools) | [Failure modes](#failure-modes)
+
+> Early v1.x. Search parses DuckDuckGo Lite's unofficial HTML and may throttle or break without notice. Requires `lynx` on `PATH`. JS-heavy pages are not supported.
+
+## Demo
+
+![pi-lynx terminal demo](docs/demo/pi-lynx.gif)
+
+Recorded terminal demo source: [`docs/demo/pi-lynx.cast`](docs/demo/pi-lynx.cast)
+
+Play locally:
+
+```bash
+asciinema play docs/demo/pi-lynx.cast
+```
+
+The demo shows:
+
+- `pi install npm:pi-lynx`
+- `lynx` available on `PATH`
+- Pi using `pi-lynx` for web search/page fetch
+- bounded, body-text-first output
+- links as opt-in context
 
 ## Install
 
