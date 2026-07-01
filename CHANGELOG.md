@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6] - 2026-06-30
+
+### Changed
+
+- Added asciinema demo (GIF + cast) to README.
+- Reworked README intro and nav for marketing.
+
 ## [1.0.5] - 2026-06-29
 
 ### Changed
