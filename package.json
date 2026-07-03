@@ -1,7 +1,7 @@
 {
   "name": "pi-lynx",
   "version": "1.0.6",
-  "description": "Pi extension for web search and page fetch via lynx + DuckDuckGo Lite. Terminal browser, web scrape, and search tools with zero API keys.",
+  "description": "Pi extension for plain-text web search and page fetch via lynx + DuckDuckGo Lite. Body text first, links opt-in, no API keys.",
   "type": "module",
   "main": "index.ts",
   "license": "MIT",
@@ -11,16 +11,19 @@
     "pi",
     "pi-coding-agent",
     "extension",
+    "agent-tool",
     "web-search",
     "web-fetch",
-    "web-scrape",
     "page-fetch",
+    "plain-text",
+    "context-safe",
     "terminal-browser",
     "text-browser",
     "duckduckgo",
     "duckduckgo-lite",
     "lynx",
-    "no-api-keys"
+    "no-api-keys",
+    "no-account"
   ],
   "scripts": {
     "test": "npx tsx index.test.ts && npx tsx tool-contract.test.ts",
