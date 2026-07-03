@@ -3,11 +3,17 @@ import { promisify } from "node:util";
 
 import {
 	buildDdgLiteUrl,
+	buildRedditSearchJsonUrl,
+	buildRedditThreadJsonUrl,
 	normalizeSearchQuery,
 	parseLinks,
+	parseRedditSearch,
+	parseRedditThread,
 	parseSearchResults,
 	resolveDdgRedirect,
 	stripLinkMarkers,
+	type RedditSearchResult,
+	type RedditThread,
 } from "./core.ts";
 
 const execFileAsync = promisify(execFile);
@@ -178,4 +184,60 @@ export async function doSearch(
 	const url = buildDdgLiteUrl(cleanQuery, effectiveFilter);
 	const raw = await lynxDump(url, 15_000, signal);
 	return parseSearchResults(raw, maxResults);
+}
+
+// ── Reddit (native fetch, no lynx needed for JSON) ────────────────────
+
+const REDDIT_USER_AGENT = "pi-lynx/1.x (+https://github.com/dabito/pi-lynx)";
+
+async function fetchRedditJson(url: string, timeoutMs: number, signal?: AbortSignal): Promise<unknown> {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), timeoutMs);
+	signal?.addEventListener("abort", () => controller.abort(), { once: true });
+
+	let res: Response;
+	try {
+		res = await fetch(url, {
+			headers: { "User-Agent": REDDIT_USER_AGENT, Accept: "application/json" },
+			signal: controller.signal,
+		});
+	} catch (err: unknown) {
+		if (controller.signal.aborted) {
+			throw new Error("Reddit request timed out or was cancelled.", { cause: err });
+		}
+		throw err;
+	} finally {
+		clearTimeout(timeout);
+	}
+
+	const contentType = res.headers.get("content-type") ?? "";
+	if (!res.ok || !contentType.includes("json")) {
+		throw new Error(
+			`Reddit returned ${res.status} ${res.statusText || ""} (non-JSON response — likely a bot check). ` +
+				"Retry later or from a different network; pi-lynx cannot bypass Reddit's anti-bot wall.",
+		);
+	}
+
+	return res.json();
+}
+
+export async function doRedditFetch(
+	url: string,
+	maxComments: number,
+	signal?: AbortSignal,
+): Promise<RedditThread> {
+	const jsonUrl = buildRedditThreadJsonUrl(url);
+	const json = await fetchRedditJson(jsonUrl, 15_000, signal);
+	return parseRedditThread(json, maxComments);
+}
+
+export async function doRedditSearch(
+	query: string,
+	subreddit: string | undefined,
+	maxResults: number,
+	signal?: AbortSignal,
+): Promise<RedditSearchResult[]> {
+	const jsonUrl = buildRedditSearchJsonUrl(query, subreddit, maxResults);
+	const json = await fetchRedditJson(jsonUrl, 15_000, signal);
+	return parseRedditSearch(json, maxResults);
 }

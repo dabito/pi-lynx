@@ -23,7 +23,12 @@ import {
 	formatSearchResults,
 	normalizeSearchQuery,
 	getSiteSearchMinIntervalMs,
+	parseRedditThread,
+	parseRedditSearch,
+	formatRedditThread,
+	formatRedditSearchResults,
 } from "./index.ts";
+import { buildRedditThreadJsonUrl, buildRedditSearchJsonUrl } from "./core.ts";
 
 // ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -32,6 +37,8 @@ const fixture = (name: string) =>
 
 const DDG_RUST_RAW = readFileSync(fixture("ddg-rust.txt"), "utf8");
 const DDG_GITHUB_RAW = readFileSync(fixture("ddg-github.txt"), "utf8");
+const REDDIT_THREAD_JSON = JSON.parse(readFileSync(fixture("reddit-thread.json"), "utf8"));
+const REDDIT_SEARCH_JSON = JSON.parse(readFileSync(fixture("reddit-search.json"), "utf8"));
 
 // ── Unit tests: parseLinks ────────────────────────────────────────────
 
@@ -426,4 +433,110 @@ describe("integration: doSearch", () => {
 			}
 		},
 	);
+});
+
+// ── Unit tests: buildRedditThreadJsonUrl / buildRedditSearchJsonUrl ───
+
+describe("buildRedditThreadJsonUrl", () => {
+	it("appends .json to a thread URL", () => {
+		const url = buildRedditThreadJsonUrl(
+			"https://www.reddit.com/r/PiCodingAgent/comments/1t0av3l/title/",
+		);
+		assert.ok(url.endsWith(".json?raw_json=1") || url.includes(".json"));
+		assert.ok(url.startsWith("https://www.reddit.com/r/PiCodingAgent/comments/1t0av3l/title.json"));
+	});
+
+	it("normalizes non-www hosts to www.reddit.com", () => {
+		const url = buildRedditThreadJsonUrl(
+			"https://old.reddit.com/r/PiCodingAgent/comments/1t0av3l/title/",
+		);
+		assert.ok(url.startsWith("https://www.reddit.com/"));
+	});
+
+	it("does not double up .json when already present", () => {
+		const url = buildRedditThreadJsonUrl(
+			"https://www.reddit.com/r/PiCodingAgent/comments/1t0av3l/title.json",
+		);
+		assert.ok(!url.includes(".json.json"));
+	});
+});
+
+describe("buildRedditSearchJsonUrl", () => {
+	it("builds a global search URL", () => {
+		const url = buildRedditSearchJsonUrl("pi extensions");
+		assert.ok(url.startsWith("https://www.reddit.com/search.json"));
+		assert.ok(url.includes("q=pi%20extensions") || url.includes("q=pi+extensions"));
+	});
+
+	it("scopes to a subreddit when provided", () => {
+		const url = buildRedditSearchJsonUrl("extensions", "PiCodingAgent");
+		assert.ok(url.startsWith("https://www.reddit.com/r/PiCodingAgent/search.json"));
+		assert.ok(url.includes("restrict_sr=1"));
+	});
+});
+
+// ── Unit tests: parseRedditThread / formatRedditThread ────────────────
+
+describe("parseRedditThread", () => {
+	it("extracts post metadata", () => {
+		const thread = parseRedditThread(REDDIT_THREAD_JSON, 10);
+		assert.equal(thread.subreddit, "PiCodingAgent");
+		assert.equal(thread.author, "curious_dev");
+		assert.equal(thread.score, 42);
+	});
+
+	it("extracts and sorts top-level comments by score, skipping 'more'", () => {
+		const thread = parseRedditThread(REDDIT_THREAD_JSON, 10);
+		assert.equal(thread.comments.length, 2);
+		assert.equal(thread.comments[0].author, "panel_fan");
+		assert.ok(thread.comments[0].score >= thread.comments[1].score);
+	});
+
+	it("respects maxComments", () => {
+		const thread = parseRedditThread(REDDIT_THREAD_JSON, 1);
+		assert.equal(thread.comments.length, 1);
+	});
+
+	it("throws on unexpected shape", () => {
+		assert.throws(() => parseRedditThread({}, 10));
+	});
+});
+
+describe("formatRedditThread", () => {
+	it("renders title, subreddit, and comments", () => {
+		const thread = parseRedditThread(REDDIT_THREAD_JSON, 10);
+		const text = formatRedditThread(thread);
+		assert.ok(text.includes("Is there a list of the best extensions for pi?"));
+		assert.ok(text.includes("r/PiCodingAgent"));
+		assert.ok(text.includes("panel_fan"));
+	});
+});
+
+// ── Unit tests: parseRedditSearch / formatRedditSearchResults ─────────
+
+describe("parseRedditSearch", () => {
+	it("extracts search results", () => {
+		const results = parseRedditSearch(REDDIT_SEARCH_JSON, 10);
+		assert.equal(results.length, 2);
+		assert.equal(results[0].title, "Best pi extensions megathread");
+	});
+
+	it("respects maxResults", () => {
+		const results = parseRedditSearch(REDDIT_SEARCH_JSON, 1);
+		assert.equal(results.length, 1);
+	});
+});
+
+describe("formatRedditSearchResults", () => {
+	it("renders result list", () => {
+		const results = parseRedditSearch(REDDIT_SEARCH_JSON, 10);
+		const text = formatRedditSearchResults("pi extensions", results);
+		assert.ok(text.includes("Best pi extensions megathread"));
+		assert.ok(text.includes("permalink") === false); // no raw key names leaked
+	});
+
+	it("handles empty results", () => {
+		const text = formatRedditSearchResults("nonexistent query", []);
+		assert.ok(text.includes("No reddit results found"));
+	});
 });

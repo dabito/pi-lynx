@@ -1,0 +1,51 @@
+[
+  {
+    "kind": "Listing",
+    "data": {
+      "children": [
+        {
+          "kind": "t3",
+          "data": {
+            "title": "Is there a list of the best extensions for pi?",
+            "author": "curious_dev",
+            "subreddit": "PiCodingAgent",
+            "score": 42,
+            "num_comments": 3,
+            "selftext": "New to pi, looking for extension recommendations.",
+            "url": "https://www.reddit.com/r/PiCodingAgent/comments/1t0av3l/is_there_a_list_of_the_best_extensions_for_pi_new/",
+            "permalink": "/r/PiCodingAgent/comments/1t0av3l/is_there_a_list_of_the_best_extensions_for_pi_new/"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "kind": "Listing",
+    "data": {
+      "children": [
+        {
+          "kind": "t1",
+          "data": {
+            "author": "panel_fan",
+            "score": 21,
+            "body": "There's a sidebar panel extension that shows live status, worth checking out."
+          }
+        },
+        {
+          "kind": "t1",
+          "data": {
+            "author": "lowscore_lurker",
+            "score": 2,
+            "body": "I just use the default footer."
+          }
+        },
+        {
+          "kind": "more",
+          "data": {
+            "count": 5
+          }
+        }
+      ]
+    }
+  }
+]

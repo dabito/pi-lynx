@@ -1,0 +1,29 @@
+{
+  "kind": "Listing",
+  "data": {
+    "children": [
+      {
+        "kind": "t3",
+        "data": {
+          "title": "Best pi extensions megathread",
+          "subreddit": "PiCodingAgent",
+          "author": "mod_bot",
+          "score": 100,
+          "num_comments": 50,
+          "permalink": "/r/PiCodingAgent/comments/abc123/best_pi_extensions_megathread/"
+        }
+      },
+      {
+        "kind": "t3",
+        "data": {
+          "title": "My sidebar panel setup",
+          "subreddit": "PiCodingAgent",
+          "author": "panel_fan",
+          "score": 30,
+          "num_comments": 5,
+          "permalink": "/r/PiCodingAgent/comments/def456/my_sidebar_panel_setup/"
+        }
+      }
+    ]
+  }
+}

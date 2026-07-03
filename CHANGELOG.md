@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.0] - 2026-07-03
+
+### Added
+
+- `lynx_reddit_fetch` — fetch a reddit thread (post + top comments) via reddit's public `.json` API, no lynx or API key needed.
+- `lynx_reddit_search` — search reddit via its `.json` API, optionally scoped to a subreddit.
+- Reddit tools use native `fetch` instead of `lynx -dump`: reddit blocks lynx's scraping and the page is JS-rendered, but the `.json` API is a plain structured-data endpoint.
+- Documented the reddit bot-check failure mode: reddit can return an HTML challenge page instead of JSON, especially from data-center IPs; the tools fail loud with no bypass.
+- Added README capabilities matrix, Reddit quick starts, and npm discovery keywords for Reddit/GitHub/Wikipedia search.
+- Documented Reddit `.json` as internal transport while keeping agent output compact Markdown/text.
+
 ## [1.0.6] - 2026-06-30
 
 ### Changed

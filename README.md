@@ -1,16 +1,31 @@
 # pi-lynx
 
-Give Pi agents plain-text web search and page fetch with no API keys, using your local `lynx` plus DuckDuckGo Lite. Body text first; links are opt-in and capped.
+Give Pi agents context-safe plain-text web search, GitHub/Wikipedia search, Reddit search/thread fetch, and page fetch with no API keys. Body text first; links are opt-in and capped.
 
-[Install](#install) | [Quick start](#quick-start) | [Demo](#demo) | [Tools](#tools) | [Failure modes](#failure-modes)
+[Capabilities](#capabilities) | [Install](#install) | [Quick start](#quick-start) | [Demo](#demo) | [Tools](#tools) | [Failure modes](#failure-modes)
 
 > Early v1.x. Search parses DuckDuckGo Lite's unofficial HTML and may throttle or break without notice. Requires `lynx` on `PATH`. JS-heavy pages are not supported.
 
+## Capabilities
+
+| Need | Tool |
+| ---- | ---- |
+| Current web search | `lynx_web_search` |
+| GitHub search | `lynx_web_search_github` |
+| Wikipedia/reference search | `lynx_web_search_wikipedia` |
+| Reddit discussion search | `lynx_reddit_search` |
+| Reddit post + top comments | `lynx_reddit_fetch` |
+| Plain-text page fetch | `lynx_web_fetch` |
+
+- Agent-readable Markdown/text by default; no raw API dumps.
+- Capped outputs to avoid flooding context.
+- No API keys or accounts for DDG Lite, page fetch, or Reddit JSON endpoints.
+
 ## Demo
 
-![pi-lynx terminal demo](docs/demo/pi-lynx.gif)
+![pi-lynx terminal demo](https://raw.githubusercontent.com/dabito/pi-lynx/main/docs/demo/pi-lynx.gif)
 
-Recorded terminal demo source: [`docs/demo/pi-lynx.cast`](docs/demo/pi-lynx.cast)
+Recorded terminal demo source: [`docs/demo/pi-lynx.cast`](https://github.com/dabito/pi-lynx/blob/main/docs/demo/pi-lynx.cast)
 
 Play locally:
 
@@ -51,6 +66,23 @@ Search:
 lynx_web_search: rust language
 ```
 
+Reddit discussion search:
+
+```text
+lynx_reddit_search: pi coding agent
+```
+
+Subreddit-scoped Reddit search:
+
+```text
+lynx_reddit_search: extensions {"subreddit": "PiCodingAgent"}
+```
+
+Reddit thread fetch:
+
+```text
+lynx_reddit_fetch: https://www.reddit.com/r/PiCodingAgent/comments/...
+```
 Fetch page text only:
 
 ```text
@@ -91,7 +123,12 @@ lynx_web_search           ← DDG Lite URL construction + result parsing
   ↑ used by
 lynx_web_search_github    ← convenience wrapper (pre-set site:github.com)
 lynx_web_search_wikipedia ← convenience wrapper (pre-set site:wikipedia.org)
+
+lynx_reddit_fetch         ← reddit .json API (native fetch, no lynx)
+lynx_reddit_search        ← reddit .json search API (native fetch, no lynx)
 ```
+
+Reddit gets its own pair of tools instead of running through `lynx_web_fetch`: reddit blocks lynx's plain-text scraping outright, and the page is JS-rendered anyway. Reddit's `.json` API (append `.json` to any thread URL) returns structured data without needing lynx or an API key, so these tools fetch it directly.
 
 ### `lynx_web_fetch`
 
@@ -139,6 +176,25 @@ Search Wikipedia using DuckDuckGo Lite. Convenience wrapper around `lynx_web_sea
 | `query`       | string | ✓        | —       | Search query         |
 | `max_results` | number |          | 8       | Max results to return |
 
+### `lynx_reddit_fetch`
+
+Fetch a Reddit thread and return compact agent-readable text: post title/body plus top comments sorted by score. Uses Reddit's public `.json` endpoint internally; no `lynx` or API key required.
+
+| Name            | Type   | Required | Default | Description                                  |
+| --------------- | ------ | -------- | ------- | --------------------------------------------- |
+| `url`           | string | ✓        | —       | Reddit thread/comments URL                    |
+| `max_comments`  | number |          | 10      | Max top-level comments to include (1–50), sorted by score |
+
+### `lynx_reddit_search`
+
+Search Reddit threads and return compact agent-readable results: titles, subreddits, authors, scores, comment counts, and permalinks. Uses Reddit's public `.json` endpoint internally; no API key required.
+
+| Name          | Type   | Required | Default | Description                                  |
+| ------------- | ------ | -------- | ------- | --------------------------------------------- |
+| `query`       | string | ✓        | —       | Search query                                  |
+| `subreddit`   | string |          | —       | Restrict search to this subreddit (no `r/` prefix) |
+| `max_results` | number |          | 10      | Max results to return (1–25)                  |
+
 ## Behavior notes
 
 - `lynx_web_fetch` returns body text only by default.
@@ -146,12 +202,14 @@ Search Wikipedia using DuckDuckGo Lite. Convenience wrapper around `lynx_web_sea
 - When links are included, they are capped by `link_limit`.
 - `max_lines` caps body text only.
 - DDG Lite site-filtered searches may throttle; `PI_LYNX_SITE_SEARCH_INTERVAL_MS` spaces them out.
+- Reddit tools use Reddit's `.json` endpoints internally but return compact Markdown/text, not raw JSON.
 
 ## Failure modes
 
 - Missing `lynx`: install it and ensure it is on `PATH`.
 - Site-filtered search throttled: wait, or raise `PI_LYNX_SITE_SEARCH_INTERVAL_MS`.
 - JS-heavy / browser-required pages: Lynx may not capture the interactive content.
+- Reddit bot check: `lynx_reddit_fetch`/`lynx_reddit_search` hit reddit's `.json` API directly, but reddit can still respond with an HTML bot-check page instead of JSON — especially from data-center IPs, CI runners, or after heavy use. The tool fails with a clear, non-retryable-by-itself error in that case; there is no bypass, so retry later or from a different network.
 
 ## Configuration catalog
 
@@ -183,6 +241,7 @@ DuckDuckGo Lite can temporarily rate-limit repeated `site:` searches. pi-lynx sp
 4. `[N]` markers are stripped from body text for clean output.
 5. `lynx_web_search` constructs a DDG Lite URL and parses search results.
 6. Site-specific tools call `lynx_web_search` with the appropriate `site:` filter.
+7. Reddit tools call Reddit `.json` endpoints directly, parse the payload, and return compact Markdown/text for agents.
 
 ## Development
 

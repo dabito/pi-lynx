@@ -6,6 +6,8 @@
  * - lynx_web_search: search via DDG Lite
  * - lynx_web_search_github: GitHub wrapper
  * - lynx_web_search_wikipedia: Wikipedia wrapper
+ * - lynx_reddit_fetch: fetch a reddit thread (post + top comments) via reddit's .json API
+ * - lynx_reddit_search: search reddit via reddit's .json API
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -13,24 +15,40 @@ import { Type } from "typebox";
 
 import {
 	buildDdgLiteUrl,
+	formatRedditSearchResults,
+	formatRedditThread,
 	formatSearchResults,
 	normalizeSearchQuery,
 	parseLinks,
+	parseRedditSearch,
+	parseRedditThread,
 	parseSearchResults,
 	resolveDdgRedirect,
 	stripLinkMarkers,
 } from "./core.ts";
-import { doFetch, doSearch, getSiteSearchMinIntervalMs } from "./runtime.ts";
+import {
+	doFetch,
+	doRedditFetch,
+	doRedditSearch,
+	doSearch,
+	getSiteSearchMinIntervalMs,
+} from "./runtime.ts";
 
 export {
 	buildDdgLiteUrl,
+	formatRedditSearchResults,
+	formatRedditThread,
 	formatSearchResults,
 	normalizeSearchQuery,
 	parseLinks,
+	parseRedditSearch,
+	parseRedditThread,
 	parseSearchResults,
 	resolveDdgRedirect,
 	stripLinkMarkers,
 	doFetch,
+	doRedditFetch,
+	doRedditSearch,
 	doSearch,
 	getSiteSearchMinIntervalMs,
 };
@@ -46,6 +64,106 @@ interface SearchToolConfig {
 	errorPrefix?: string;
 }
 
+type ThemeLike = {
+	fg: (name: never, text: string) => string;
+	bold: (text: string) => string;
+};
+
+type RenderComponent = {
+	render(width: number): string[];
+	invalidate(): void;
+};
+
+const VISUAL = {
+	success: { fallback: "✓", nerd: "󰄬", nerdCodepoint: "f012c", theme: "success" },
+	warning: { fallback: "◐", nerd: "", nerdCodepoint: "f05d", theme: "warning" },
+	info: { fallback: "•", nerd: "󰋽", nerdCodepoint: "f02fd", theme: "accent" },
+	failure: { fallback: "✗", nerd: "✗", theme: "error" },
+} as const;
+
+type VisualState = keyof typeof VISUAL;
+
+function stateIcon(theme: ThemeLike, state: VisualState): string {
+	const visual = VISUAL[state];
+	return theme.fg(visual.theme as never, visual.nerd);
+}
+
+function truncateLine(line: string, width: number): string {
+	if (width <= 0) return "";
+	if (line.length <= width) return line;
+	if (width === 1) return "…";
+	return `${line.slice(0, width - 1)}…`;
+}
+
+function makeComponent(lines: string[]): RenderComponent {
+	return {
+		render(width: number) {
+			return lines.map((line) => truncateLine(line, width));
+		},
+		invalidate() {},
+	};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function firstString(value: unknown, keys: string[]): string | undefined {
+	if (!isRecord(value)) return undefined;
+	for (const key of keys) {
+		const item = value[key];
+		if (typeof item === "string" && item.length > 0) return item;
+	}
+	return undefined;
+}
+
+function firstNumber(value: unknown, keys: string[]): number | undefined {
+	if (!isRecord(value)) return undefined;
+	for (const key of keys) {
+		const item = value[key];
+		if (typeof item === "number") return item;
+	}
+	return undefined;
+}
+
+function renderToolCall(label: string, args: unknown, theme: ThemeLike): RenderComponent {
+	const target = firstString(args, ["query", "url", "path", "subreddit"]);
+	const limit = firstNumber(args, ["max_results", "max_lines", "max_comments", "link_limit"]);
+	const title = theme.fg("toolTitle" as never, theme.bold(`${label}:`));
+	const targetText = target ? ` ${theme.fg("accent" as never, target)}` : "";
+	const limitText = limit !== undefined ? theme.fg("warning" as never, ` · ${limit}`) : "";
+	return makeComponent([`${title}${targetText}${limitText}`]);
+}
+
+function renderToolResult(label: string, result: unknown, theme: ThemeLike): RenderComponent {
+	const payload = isRecord(result) ? result : {};
+	const content = Array.isArray(payload.content) ? payload.content : [];
+	const first = isRecord(content[0]) ? content[0] : undefined;
+	const text = typeof first?.text === "string" ? first.text : "";
+	const details = isRecord(payload.details) ? payload.details : {};
+	const isError = payload.isError === true || details.ok === false;
+	const lines = text ? text.split(/\r?\n/) : [];
+
+	if (isError) {
+		const firstLine = lines.find(Boolean) ?? `${label} failed.`;
+		return makeComponent([`${stateIcon(theme, "failure")} ${firstLine}`]);
+	}
+
+	if (lines.length > 20) {
+		return makeComponent([
+			`${stateIcon(theme, "info")} ${label} folded: ${lines.length} lines`,
+			lines[0] ?? "",
+			`... (${lines.length - 2} lines) ...`,
+			lines[lines.length - 1] ?? "",
+		]);
+	}
+
+	const count = firstNumber(details, ["resultCount", "lineCount", "commentCount", "linkCount"]);
+	const countText = count !== undefined ? ` ${count}` : "";
+	const summary = lines[0] ?? `${label} ok.${countText}`;
+	return makeComponent([`${stateIcon(theme, "success")} ${summary}`, ...lines.slice(1)]);
+}
+
 function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 	const hasSiteFilter = Boolean(config.siteFilter);
 
@@ -55,6 +173,12 @@ function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 		description: config.description,
 		promptSnippet: config.promptSnippet,
 		promptGuidelines: config.promptGuidelines,
+		renderCall(args, theme) {
+			return renderToolCall(config.label, args, theme as ThemeLike);
+		},
+		renderResult(result, _options, theme) {
+			return renderToolResult(config.label, result, theme as ThemeLike);
+		},
 		parameters: Type.Object({
 			query: Type.String({ description: "Search query" }),
 			max_results: Type.Optional(
@@ -133,6 +257,12 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 			"If you include links, keep them bounded with link_limit.",
 			"For very long pages, the output may be truncated.",
 		],
+		renderCall(args, theme) {
+			return renderToolCall("Lynx Web Fetch", args, theme as ThemeLike);
+		},
+		renderResult(result, _options, theme) {
+			return renderToolResult("Lynx Web Fetch", result, theme as ThemeLike);
+		},
 		parameters: Type.Object({
 			url: Type.String({ description: "URL to fetch" }),
 			max_lines: Type.Optional(
@@ -236,5 +366,132 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 		siteFilter: "site:wikipedia.org",
 		contextLabel: "Searching Wikipedia",
 		errorPrefix: "Wikipedia search failed",
+	});
+
+	pi.registerTool({
+		name: "lynx_reddit_fetch",
+		label: "Lynx Reddit Fetch",
+		description:
+			"Fetch a Reddit thread and return compact agent-readable text: post title/body plus top comments sorted by score. Uses Reddit's public JSON endpoint internally; no API key required.",
+		promptSnippet: "Fetch a Reddit thread's post and top comments",
+		promptGuidelines: [
+			"Use lynx_reddit_fetch for a reddit.com thread/comments URL when you need the post body and top comments.",
+			"Returns compact text, not raw JSON: title, subreddit, author, score, post body, and top comments sorted by score.",
+			"If Reddit returns a bot-check page instead of JSON, the tool fails with a clear error — retry later or from a different network; it cannot be bypassed.",
+		],
+		renderCall(args, theme) {
+			return renderToolCall("Lynx Reddit Fetch", args, theme as ThemeLike);
+		},
+		renderResult(result, _options, theme) {
+			return renderToolResult("Lynx Reddit Fetch", result, theme as ThemeLike);
+		},
+		parameters: Type.Object({
+			url: Type.String({ description: "Reddit thread/comments URL" }),
+			max_comments: Type.Optional(
+				Type.Number({
+					description: "Maximum number of top-level comments to include (1–50, default 10)",
+					default: 10,
+					minimum: 1,
+					maximum: 50,
+				}),
+			),
+		}),
+		async execute(_toolCallId, params, signal, onUpdate) {
+			const maxComments = Math.min(Math.max(params.max_comments ?? 10, 1), 50);
+
+			onUpdate?.({
+				content: [{ type: "text", text: `Fetching reddit thread: ${params.url}...` }],
+				details: undefined,
+			});
+
+			try {
+				const thread = await doRedditFetch(params.url, maxComments, signal);
+				const text = formatRedditThread(thread);
+
+				return {
+					content: [{ type: "text", text }],
+					details: {
+						source: "reddit.json",
+						url: params.url,
+						permalink: thread.permalink,
+						subreddit: thread.subreddit,
+						commentCount: thread.comments.length,
+						maxComments,
+					},
+				};
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				return {
+					content: [{ type: "text", text: `Reddit fetch failed: ${message}` }],
+					isError: true,
+					details: { source: "reddit.json", url: params.url, error: message },
+				};
+			}
+		},
+	});
+
+	pi.registerTool({
+		name: "lynx_reddit_search",
+		label: "Lynx Reddit Search",
+		description:
+			"Search Reddit threads and return compact agent-readable results: titles, subreddits, authors, scores, comment counts, and permalinks. Uses Reddit's public JSON endpoint internally; no API key required.",
+		promptSnippet: "Search Reddit threads, optionally within one subreddit",
+		promptGuidelines: [
+			"Use lynx_reddit_search to find Reddit discussions by keyword, optionally scoped with the subreddit parameter.",
+			"Returns compact text, not raw JSON: title, subreddit, author, score, comment count, and permalink.",
+			"Use lynx_reddit_fetch on a result permalink when you need the post body and top comments.",
+			"If Reddit returns a bot-check page instead of JSON, the tool fails with a clear error — retry later or from a different network; it cannot be bypassed.",
+		],
+		renderCall(args, theme) {
+			return renderToolCall("Lynx Reddit Search", args, theme as ThemeLike);
+		},
+		renderResult(result, _options, theme) {
+			return renderToolResult("Lynx Reddit Search", result, theme as ThemeLike);
+		},
+		parameters: Type.Object({
+			query: Type.String({ description: "Search query" }),
+			subreddit: Type.Optional(
+				Type.String({ description: "Restrict search to this subreddit (without r/ prefix)" }),
+			),
+			max_results: Type.Optional(
+				Type.Number({
+					description: "Maximum number of results to return (1–25, default 10)",
+					default: 10,
+					minimum: 1,
+					maximum: 25,
+				}),
+			),
+		}),
+		async execute(_toolCallId, params, signal, onUpdate) {
+			const maxResults = Math.min(Math.max(params.max_results ?? 10, 1), 25);
+
+			onUpdate?.({
+				content: [{ type: "text", text: `Searching reddit: "${params.query}"...` }],
+				details: undefined,
+			});
+
+			try {
+				const results = await doRedditSearch(params.query, params.subreddit, maxResults, signal);
+				const text = formatRedditSearchResults(params.query, results);
+
+				return {
+					content: [{ type: "text", text }],
+					details: {
+						source: "reddit.json",
+						query: params.query,
+						subreddit: params.subreddit,
+						resultCount: results.length,
+						maxResults,
+					},
+				};
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				return {
+					content: [{ type: "text", text: `Reddit search failed: ${message}` }],
+					isError: true,
+					details: { source: "reddit.json", query: params.query, error: message },
+				};
+			}
+		},
 	});
 }

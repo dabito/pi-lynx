@@ -233,3 +233,187 @@ export function normalizeSearchQuery(
 
 	return { cleanQuery, effectiveFilter };
 }
+
+// ── Reddit ──────────────────────────────────────────────────────────
+
+export interface RedditComment {
+	author: string;
+	score: number;
+	body: string;
+}
+
+export interface RedditThread {
+	title: string;
+	author: string;
+	subreddit: string;
+	score: number;
+	numComments: number;
+	selftext: string;
+	url: string;
+	permalink: string;
+	comments: RedditComment[];
+}
+
+export interface RedditSearchResult {
+	title: string;
+	subreddit: string;
+	author: string;
+	score: number;
+	numComments: number;
+	permalink: string;
+}
+
+/** Normalize any reddit thread/comments URL to its `.json` API form. */
+export function buildRedditThreadJsonUrl(url: string): string {
+	const u = new URL(url);
+	u.hostname = "www.reddit.com";
+	u.pathname = u.pathname.replace(/\/+$/, "").replace(/\.json$/, "");
+	if (!u.pathname.endsWith(".json")) u.pathname += ".json";
+	u.searchParams.set("raw_json", "1");
+	return u.toString();
+}
+
+/** Build a reddit search `.json` URL, optionally scoped to a subreddit. */
+export function buildRedditSearchJsonUrl(
+	query: string,
+	subreddit?: string,
+	maxResults = 10,
+): string {
+	const base = subreddit
+		? `https://www.reddit.com/r/${encodeURIComponent(subreddit)}/search`
+		: "https://www.reddit.com/search";
+	const u = new URL(`${base}.json`);
+	u.searchParams.set("q", query.trim());
+	u.searchParams.set("limit", String(Math.min(Math.max(maxResults, 1), 25)));
+	u.searchParams.set("raw_json", "1");
+	if (subreddit) u.searchParams.set("restrict_sr", "1");
+	return u.toString();
+}
+
+interface RedditListingChild<T> {
+	kind: string;
+	data: T;
+}
+
+interface RedditListing<T> {
+	data: { children: RedditListingChild<T>[] };
+}
+
+interface RedditPostData {
+	title: string;
+	author: string;
+	subreddit: string;
+	score: number;
+	num_comments: number;
+	selftext: string;
+	url: string;
+	permalink: string;
+}
+
+interface RedditCommentData {
+	author: string;
+	score: number;
+	body: string;
+}
+
+/** Parse a reddit `[postListing, commentListing]` thread JSON payload. */
+export function parseRedditThread(json: unknown, maxComments: number): RedditThread {
+	if (!Array.isArray(json) || json.length < 1) {
+		throw new Error("Unexpected reddit thread response shape.");
+	}
+
+	const postListing = json[0] as RedditListing<RedditPostData>;
+	const post = postListing?.data?.children?.[0]?.data;
+	if (!post) throw new Error("Reddit thread post data not found.");
+
+	const commentListing = json[1] as RedditListing<RedditCommentData> | undefined;
+	const rawComments = commentListing?.data?.children ?? [];
+
+	const comments = rawComments
+		.filter((c) => c.kind === "t1" && typeof c.data?.body === "string")
+		.map((c) => ({
+			author: c.data.author,
+			score: c.data.score,
+			body: c.data.body,
+		}))
+		.sort((a, b) => b.score - a.score)
+		.slice(0, maxComments);
+
+	return {
+		title: post.title,
+		author: post.author,
+		subreddit: post.subreddit,
+		score: post.score,
+		numComments: post.num_comments,
+		selftext: post.selftext ?? "",
+		url: post.url,
+		permalink: post.permalink,
+		comments,
+	};
+}
+
+/** Parse a reddit search listing JSON payload. */
+export function parseRedditSearch(
+	json: unknown,
+	maxResults: number,
+): RedditSearchResult[] {
+	const listing = json as RedditListing<
+		RedditPostData & { num_comments: number }
+	>;
+	const children = listing?.data?.children ?? [];
+
+	return children
+		.filter((c) => c.kind === "t3")
+		.slice(0, maxResults)
+		.map((c) => ({
+			title: c.data.title,
+			subreddit: c.data.subreddit,
+			author: c.data.author,
+			score: c.data.score,
+			numComments: c.data.num_comments,
+			permalink: c.data.permalink,
+		}));
+}
+
+export function formatRedditThread(thread: RedditThread): string {
+	const parts: string[] = [];
+	parts.push(`# ${thread.title}`);
+	parts.push(
+		`r/${thread.subreddit} · u/${thread.author} · ${thread.score} pts · ${thread.numComments} comments\n`,
+	);
+	if (thread.selftext) parts.push(`${thread.selftext}\n`);
+
+	if (thread.comments.length === 0) {
+		parts.push("No comments found.");
+		return parts.join("\n");
+	}
+
+	parts.push(`## Top comments (${thread.comments.length})\n`);
+	for (const c of thread.comments) {
+		parts.push(`**u/${c.author}** (${c.score} pts)`);
+		parts.push(`${c.body}\n`);
+	}
+
+	return parts.join("\n");
+}
+
+export function formatRedditSearchResults(
+	query: string,
+	results: RedditSearchResult[],
+): string {
+	if (results.length === 0) {
+		return `No reddit results found for "${query}".`;
+	}
+
+	const parts: string[] = [`## Reddit results (${results.length})\n`];
+	for (const [idx, r] of results.entries()) {
+		parts.push(`${idx + 1}. **${r.title}**`);
+		parts.push(
+			`   r/${r.subreddit} · u/${r.author} · ${r.score} pts · ${r.numComments} comments`,
+		);
+		parts.push(`   https://www.reddit.com${r.permalink}`);
+		parts.push("");
+	}
+
+	return parts.join("\n");
+}
