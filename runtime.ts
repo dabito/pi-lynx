@@ -3,11 +3,11 @@ import { promisify } from "node:util";
 
 import {
 	buildDdgLiteUrl,
-	buildRedditSearchJsonUrl,
+	buildOldRedditSearchUrl,
 	buildRedditThreadJsonUrl,
 	normalizeSearchQuery,
 	parseLinks,
-	parseRedditSearch,
+	parseOldRedditSearch,
 	parseRedditThread,
 	parseSearchResults,
 	resolveDdgRedirect,
@@ -186,7 +186,7 @@ export async function doSearch(
 	return parseSearchResults(raw, maxResults);
 }
 
-// ── Reddit (native fetch, no lynx needed for JSON) ────────────────────
+// ── Reddit ────────────────────────────────────────────────────────────
 
 const REDDIT_USER_AGENT = "pi-lynx/1.x (+https://github.com/dabito/pi-lynx)";
 
@@ -237,7 +237,7 @@ export async function doRedditSearch(
 	maxResults: number,
 	signal?: AbortSignal,
 ): Promise<RedditSearchResult[]> {
-	const jsonUrl = buildRedditSearchJsonUrl(query, subreddit, maxResults);
-	const json = await fetchRedditJson(jsonUrl, 15_000, signal);
-	return parseRedditSearch(json, maxResults);
+	const url = buildOldRedditSearchUrl(query, subreddit);
+	const raw = await lynxDump(url, 15_000, signal);
+	return parseOldRedditSearch(raw, maxResults);
 }

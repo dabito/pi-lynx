@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1] - 2026-07-04
+
+### Fixed
+
+- Switched `lynx_reddit_search` from Reddit JSON search to old.reddit.com via `lynx -dump`; Reddit JSON search frequently returns 403/bot-check responses.
+- Added old.reddit search parser coverage and fixture.
+- Used `pi-tui` `truncateToWidth` for widget rendering so ANSI, tabs, emoji, and CJK text truncate by display width.
+
 ## [1.1.0] - 2026-07-03
 
 ### Added

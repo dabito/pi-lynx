@@ -290,6 +290,104 @@ export function buildRedditSearchJsonUrl(
 	return u.toString();
 }
 
+/** Build an old.reddit.com search URL, optionally scoped to a subreddit. */
+export function buildOldRedditSearchUrl(
+	query: string,
+	subreddit?: string,
+): string {
+	const base = subreddit
+		? `https://old.reddit.com/r/${encodeURIComponent(subreddit)}/search`
+		: "https://old.reddit.com/search";
+	const u = new URL(base);
+	u.searchParams.set("q", query.trim());
+	u.searchParams.set("sort", "relevance");
+	u.searchParams.set("t", "all");
+	if (subreddit) u.searchParams.set("restrict_sr", "on");
+	return u.toString();
+}
+
+function parseOldRedditCount(value: string): number {
+	return Number.parseInt(value.replace(/,/g, ""), 10);
+}
+
+function redditPermalinkFromUrl(url: string): string {
+	try {
+		const u = new URL(url);
+		if (!/reddit\.com$/.test(u.hostname) || !u.pathname.includes("/comments/")) {
+			return "";
+		}
+		return u.pathname;
+	} catch {
+		return "";
+	}
+}
+
+function cleanOldRedditLine(line: string): string {
+	return stripLinkMarkers(line.trim()).replace(/\s+/g, " ").trim();
+}
+
+function cleanOldRedditTitle(title: string): string {
+	return title
+		.replace(/^(Official Source|Post-Match Thread|Match Thread|Media|Stats|News)(?=\S)/, "$1 ")
+		.trim();
+}
+
+/** Parse lynx -dump output from old.reddit.com search. */
+export function parseOldRedditSearch(raw: string, maxResults: number): RedditSearchResult[] {
+	const links = parseLinks(raw);
+	const lines = raw.split("\n");
+	const results: RedditSearchResult[] = [];
+
+	for (let i = 0; i < lines.length && results.length < maxResults; i++) {
+		const rawTitle = lines[i]?.trim() ?? "";
+		if (!rawTitle || /^posts$/i.test(rawTitle) || !/\[\d+\]/.test(rawTitle)) continue;
+
+		let metaIdx = -1;
+		for (let j = i + 1; j < Math.min(lines.length, i + 5); j++) {
+			if (/\b[\d,]+\s+points?\b.*\b[\d,]+\s+comments?\b/i.test(cleanOldRedditLine(lines[j]))) {
+				metaIdx = j;
+				break;
+			}
+		}
+		if (metaIdx === -1) continue;
+
+		const title = cleanOldRedditTitle(
+			lines.slice(i, metaIdx).map(cleanOldRedditLine).filter(Boolean).join(" "),
+		);
+		if (!title) continue;
+
+		const rawTitleBlock = lines.slice(i, metaIdx).join("\n");
+		const titleLinkNum = /\[(\d+)\]/.exec(rawTitleBlock)?.[1];
+		const permalink = titleLinkNum
+			? redditPermalinkFromUrl(links.get(Number.parseInt(titleLinkNum, 10)) ?? "")
+			: "";
+		if (!permalink) continue;
+
+		const metaText = lines
+			.slice(metaIdx, Math.min(lines.length, metaIdx + 4))
+			.map(cleanOldRedditLine)
+			.join(" ");
+		const scoreMatch = /([\d,]+)\s+points?/i.exec(metaText);
+		const commentsMatch = /([\d,]+)\s+comments?/i.exec(metaText);
+		const authorMatch = /\bby\s+([A-Za-z0-9_-]+)/i.exec(metaText);
+		const subredditMatch = /\br\/([A-Za-z0-9_]+)/i.exec(metaText);
+		if (!scoreMatch || !commentsMatch || !authorMatch || !subredditMatch) continue;
+
+		results.push({
+			title,
+			subreddit: subredditMatch[1],
+			author: authorMatch[1],
+			score: parseOldRedditCount(scoreMatch[1]),
+			numComments: parseOldRedditCount(commentsMatch[1]),
+			permalink,
+		});
+
+		i = metaIdx;
+	}
+
+	return results;
+}
+
 interface RedditListingChild<T> {
 	kind: string;
 	data: T;

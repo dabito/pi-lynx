@@ -19,7 +19,7 @@ Give Pi agents context-safe plain-text web search, GitHub/Wikipedia search, Redd
 
 - Agent-readable Markdown/text by default; no raw API dumps.
 - Capped outputs to avoid flooding context.
-- No API keys or accounts for DDG Lite, page fetch, or Reddit JSON endpoints.
+- No API keys or accounts for DDG Lite, page fetch, old Reddit search, or Reddit thread JSON.
 
 ## Demo
 
@@ -124,11 +124,11 @@ lynx_web_search           ← DDG Lite URL construction + result parsing
 lynx_web_search_github    ← convenience wrapper (pre-set site:github.com)
 lynx_web_search_wikipedia ← convenience wrapper (pre-set site:wikipedia.org)
 
-lynx_reddit_fetch         ← reddit .json API (native fetch, no lynx)
-lynx_reddit_search        ← reddit .json search API (native fetch, no lynx)
+lynx_reddit_search        ← old.reddit.com search (lynx -dump + parse)
+lynx_reddit_fetch         ← reddit thread .json API (native fetch)
 ```
 
-Reddit gets its own pair of tools instead of running through `lynx_web_fetch`: reddit blocks lynx's plain-text scraping outright, and the page is JS-rendered anyway. Reddit's `.json` API (append `.json` to any thread URL) returns structured data without needing lynx or an API key, so these tools fetch it directly.
+Reddit search uses old.reddit.com first because Reddit's JSON search endpoint usually blocks bot-like traffic. Reddit thread fetch still uses the public `.json` thread endpoint because it returns cleaner post/comment data when available.
 
 ### `lynx_web_fetch`
 
@@ -187,7 +187,7 @@ Fetch a Reddit thread and return compact agent-readable text: post title/body pl
 
 ### `lynx_reddit_search`
 
-Search Reddit threads and return compact agent-readable results: titles, subreddits, authors, scores, comment counts, and permalinks. Uses Reddit's public `.json` endpoint internally; no API key required.
+Search Reddit threads via old.reddit.com and return compact agent-readable results: titles, subreddits, authors, scores, comment counts, and permalinks. No API key required.
 
 | Name          | Type   | Required | Default | Description                                  |
 | ------------- | ------ | -------- | ------- | --------------------------------------------- |
@@ -202,14 +202,14 @@ Search Reddit threads and return compact agent-readable results: titles, subredd
 - When links are included, they are capped by `link_limit`.
 - `max_lines` caps body text only.
 - DDG Lite site-filtered searches may throttle; `PI_LYNX_SITE_SEARCH_INTERVAL_MS` spaces them out.
-- Reddit tools use Reddit's `.json` endpoints internally but return compact Markdown/text, not raw JSON.
+- `lynx_reddit_search` uses old.reddit.com and returns compact Markdown/text, not raw HTML.
 
 ## Failure modes
 
 - Missing `lynx`: install it and ensure it is on `PATH`.
 - Site-filtered search throttled: wait, or raise `PI_LYNX_SITE_SEARCH_INTERVAL_MS`.
 - JS-heavy / browser-required pages: Lynx may not capture the interactive content.
-- Reddit bot check: `lynx_reddit_fetch`/`lynx_reddit_search` hit reddit's `.json` API directly, but reddit can still respond with an HTML bot-check page instead of JSON — especially from data-center IPs, CI runners, or after heavy use. The tool fails with a clear, non-retryable-by-itself error in that case; there is no bypass, so retry later or from a different network.
+- Reddit bot check: `lynx_reddit_search` uses old.reddit.com because Reddit JSON search is often blocked. `lynx_reddit_fetch` still uses Reddit's `.json` thread endpoint and can receive an HTML bot-check page instead of JSON; there is no bypass, so retry later or from a different network.
 
 ## Configuration catalog
 
@@ -241,7 +241,8 @@ DuckDuckGo Lite can temporarily rate-limit repeated `site:` searches. pi-lynx sp
 4. `[N]` markers are stripped from body text for clean output.
 5. `lynx_web_search` constructs a DDG Lite URL and parses search results.
 6. Site-specific tools call `lynx_web_search` with the appropriate `site:` filter.
-7. Reddit tools call Reddit `.json` endpoints directly, parse the payload, and return compact Markdown/text for agents.
+7. `lynx_reddit_search` runs `lynx -dump` on old.reddit.com search and parses compact result metadata.
+8. `lynx_reddit_fetch` calls Reddit's `.json` thread endpoint, parses the payload, and returns compact Markdown/text.
 
 ## Development
 

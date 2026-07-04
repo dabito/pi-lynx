@@ -7,19 +7,22 @@
  * - lynx_web_search_github: GitHub wrapper
  * - lynx_web_search_wikipedia: Wikipedia wrapper
  * - lynx_reddit_fetch: fetch a reddit thread (post + top comments) via reddit's .json API
- * - lynx_reddit_search: search reddit via reddit's .json API
+ * - lynx_reddit_search: search reddit via old.reddit.com
  */
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 import {
 	buildDdgLiteUrl,
+	buildOldRedditSearchUrl,
 	formatRedditSearchResults,
 	formatRedditThread,
 	formatSearchResults,
 	normalizeSearchQuery,
 	parseLinks,
+	parseOldRedditSearch,
 	parseRedditSearch,
 	parseRedditThread,
 	parseSearchResults,
@@ -36,11 +39,13 @@ import {
 
 export {
 	buildDdgLiteUrl,
+	buildOldRedditSearchUrl,
 	formatRedditSearchResults,
 	formatRedditThread,
 	formatSearchResults,
 	normalizeSearchQuery,
 	parseLinks,
+	parseOldRedditSearch,
 	parseRedditSearch,
 	parseRedditThread,
 	parseSearchResults,
@@ -88,11 +93,14 @@ function stateIcon(theme: ThemeLike, state: VisualState): string {
 	return theme.fg(visual.theme as never, visual.nerd);
 }
 
+// Delegates to pi-tui's own width measurement (ANSI escapes from theme.fg,
+// tabs, and wide/emoji graphemes from arbitrary fetched web/reddit content
+// all need to be measured correctly here). A length/slice-based truncation
+// undercounts wide content and can slice mid-escape-sequence, corrupting the
+// very same rendering pi-tui re-measures — the bug class that crashed a
+// real pi session in a sibling extension (pi-hledit, see its CHANGELOG).
 function truncateLine(line: string, width: number): string {
-	if (width <= 0) return "";
-	if (line.length <= width) return line;
-	if (width === 1) return "…";
-	return `${line.slice(0, width - 1)}…`;
+	return truncateToWidth(line, width, "…");
 }
 
 function makeComponent(lines: string[]): RenderComponent {
@@ -434,13 +442,13 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 		name: "lynx_reddit_search",
 		label: "Lynx Reddit Search",
 		description:
-			"Search Reddit threads and return compact agent-readable results: titles, subreddits, authors, scores, comment counts, and permalinks. Uses Reddit's public JSON endpoint internally; no API key required.",
+			"Search Reddit threads via old.reddit.com and return compact agent-readable results: titles, subreddits, authors, scores, comment counts, and permalinks. No API key required.",
 		promptSnippet: "Search Reddit threads, optionally within one subreddit",
 		promptGuidelines: [
 			"Use lynx_reddit_search to find Reddit discussions by keyword, optionally scoped with the subreddit parameter.",
-			"Returns compact text, not raw JSON: title, subreddit, author, score, comment count, and permalink.",
+			"Uses old.reddit.com because Reddit's JSON endpoint often blocks bot-like traffic.",
+			"Returns compact text, not raw HTML/JSON: title, subreddit, author, score, comment count, and permalink.",
 			"Use lynx_reddit_fetch on a result permalink when you need the post body and top comments.",
-			"If Reddit returns a bot-check page instead of JSON, the tool fails with a clear error — retry later or from a different network; it cannot be bypassed.",
 		],
 		renderCall(args, theme) {
 			return renderToolCall("Lynx Reddit Search", args, theme as ThemeLike);
@@ -477,7 +485,7 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 				return {
 					content: [{ type: "text", text }],
 					details: {
-						source: "reddit.json",
+						source: "old.reddit",
 						query: params.query,
 						subreddit: params.subreddit,
 						resultCount: results.length,
@@ -489,7 +497,7 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 				return {
 					content: [{ type: "text", text: `Reddit search failed: ${message}` }],
 					isError: true,
-					details: { source: "reddit.json", query: params.query, error: message },
+					details: { source: "old.reddit", query: params.query, error: message },
 				};
 			}
 		},

@@ -25,10 +25,15 @@ import {
 	getSiteSearchMinIntervalMs,
 	parseRedditThread,
 	parseRedditSearch,
+	parseOldRedditSearch,
 	formatRedditThread,
 	formatRedditSearchResults,
 } from "./index.ts";
-import { buildRedditThreadJsonUrl, buildRedditSearchJsonUrl } from "./core.ts";
+import {
+	buildRedditThreadJsonUrl,
+	buildRedditSearchJsonUrl,
+	buildOldRedditSearchUrl,
+} from "./core.ts";
 
 // ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -39,6 +44,7 @@ const DDG_RUST_RAW = readFileSync(fixture("ddg-rust.txt"), "utf8");
 const DDG_GITHUB_RAW = readFileSync(fixture("ddg-github.txt"), "utf8");
 const REDDIT_THREAD_JSON = JSON.parse(readFileSync(fixture("reddit-thread.json"), "utf8"));
 const REDDIT_SEARCH_JSON = JSON.parse(readFileSync(fixture("reddit-search.json"), "utf8"));
+const OLD_REDDIT_SEARCH_RAW = readFileSync(fixture("old-reddit-search.txt"), "utf8");
 
 // ── Unit tests: parseLinks ────────────────────────────────────────────
 
@@ -475,6 +481,22 @@ describe("buildRedditSearchJsonUrl", () => {
 	});
 });
 
+describe("buildOldRedditSearchUrl", () => {
+	it("builds an old.reddit global search URL", () => {
+		const url = buildOldRedditSearchUrl("world cup 2026");
+		assert.ok(url.startsWith("https://old.reddit.com/search"));
+		assert.ok(url.includes("q=world%20cup%202026") || url.includes("q=world+cup+2026"));
+		assert.ok(url.includes("sort=relevance"));
+		assert.ok(url.includes("t=all"));
+	});
+
+	it("scopes old.reddit search to a subreddit", () => {
+		const url = buildOldRedditSearchUrl("world cup 2026", "soccer");
+		assert.ok(url.startsWith("https://old.reddit.com/r/soccer/search"));
+		assert.ok(url.includes("restrict_sr=on"));
+	});
+});
+
 // ── Unit tests: parseRedditThread / formatRedditThread ────────────────
 
 describe("parseRedditThread", () => {
@@ -509,6 +531,23 @@ describe("formatRedditThread", () => {
 		assert.ok(text.includes("Is there a list of the best extensions for pi?"));
 		assert.ok(text.includes("r/PiCodingAgent"));
 		assert.ok(text.includes("panel_fan"));
+	});
+});
+
+describe("parseOldRedditSearch", () => {
+	it("extracts old.reddit search results", () => {
+		const results = parseOldRedditSearch(OLD_REDDIT_SEARCH_RAW, 10);
+		assert.equal(results.length, 2);
+		assert.equal(results[0].subreddit, "soccer");
+		assert.equal(results[0].author, "nexxwav");
+		assert.equal(results[0].score, 1776);
+		assert.equal(results[0].numComments, 946);
+		assert.ok(results[0].permalink.startsWith("/r/soccer/comments/1tx8wuy/"));
+	});
+
+	it("respects maxResults for old.reddit search", () => {
+		const results = parseOldRedditSearch(OLD_REDDIT_SEARCH_RAW, 1);
+		assert.equal(results.length, 1);
 	});
 });
 

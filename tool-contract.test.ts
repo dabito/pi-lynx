@@ -102,4 +102,44 @@ describe("tool contract", () => {
 		]);
 		assert.equal("󰋽".codePointAt(0)?.toString(16), "f02fd");
 	});
+
+	// Fetched web/reddit content can contain tabs and wide/emoji graphemes,
+	// and folded titles/errors are pre-colored with real ANSI escapes (see
+	// renderToolCall/renderToolResult using theme.fg). A length/slice-based
+	// truncation undercounts wide content and can slice mid-escape-sequence
+	// — the same bug class that crashed a real pi session in pi-hledit (see
+	// its CHANGELOG). Sweep a range of widths and assert the rendered lines
+	// never exceed the requested width.
+	it("truncation never exceeds the requested width, with tabs/ANSI/wide content", async () => {
+		const { visibleWidth } = await import("@earendil-works/pi-tui");
+		const search = collectTools().find((t) => t.name === "lynx_web_search");
+		assert.ok(search?.renderResult);
+
+		const realTheme: ThemeStub = {
+			fg: (name, text) => `\x1b[38;2;125;207;255m${text}\x1b[39m<${name}>`,
+			bold: (text) => `\x1b[1m${text}\x1b[22m`,
+		};
+
+		const trickyLines = [
+			"col1\tcol2\tcol3 tab-separated table row from a fetched page",
+			"emoji-heavy line 🚀🔥✨ with wide CJK 你好世界 mixed in",
+			"a very long plain ascii line meant to force truncation at small widths too",
+			"",
+		];
+
+		const rendered = search.renderResult(
+			{ content: [{ type: "text", text: trickyLines.join("\n") }], details: { resultCount: 4 } },
+			{},
+			realTheme,
+		);
+
+		for (let width = 0; width <= 120; width++) {
+			for (const line of rendered.render(width)) {
+				assert.ok(
+					visibleWidth(line) <= width,
+					`render(${width}) produced a line of visual width ${visibleWidth(line)}: ${JSON.stringify(line)}`,
+				);
+			}
+		}
+	});
 });

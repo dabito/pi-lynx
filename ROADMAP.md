@@ -26,15 +26,10 @@ Findings so far (2026-07-03):
 Next step: decide whether to go through `lynx -dump` (reuse existing tool-composition pattern, accept the messier text parsing) or native `fetch` + light HTML parsing (cleaner given the known `result-wrapper`/`data-type="web"` hooks, but breaks the "everything goes through lynx" consistency pi-lynx otherwise has) — then capture a couple of real result pages as fixtures and implement whichever parser.
 
 
-## Reddit search provider
+## Reddit thread fallback
 
-Add `lynx_reddit_search` backed by old Reddit search (`https://old.reddit.com/search?q=<query>&sort=<sort>&t=<time>`) or Reddit JSON (`https://www.reddit.com/search.json?q=<query>`), as a direct Reddit source that avoids DDG `site:reddit.com` throttling.
+`lynx_reddit_search` now uses old.reddit.com as the primary path because Reddit JSON search frequently returns 403/bot-check responses. Remaining Reddit follow-up:
 
-Findings so far (2026-07-03):
-
-- `old.reddit.com/search` is lynx-readable and returns useful server-rendered results without JavaScript.
-- Old Reddit supports search operators (`subreddit:`, `author:`, `site:`, `url:`, `selftext:`, `self:yes/no`, `nsfw:yes/no`) and sort/time controls.
-- Subreddit-scoped search can map to `/r/<subreddit>/search?q=<query>&restrict_sr=on`.
-- Reddit JSON endpoints are cleaner for structured output when available, but may hit bot checks; old Reddit remains useful as a text-first fallback.
-
-Next step: choose JSON-first with old.reddit fallback, capture fixtures for search + thread fetch, and document Reddit anti-bot failure modes clearly.
+- Add an old.reddit thread fallback for `lynx_reddit_fetch` if Reddit's `.json` thread endpoint becomes unreliable.
+- Consider exposing old Reddit sort/time controls (`sort=hot|top|new|comments`, `t=hour|day|week|month|year|all`) after real usage proves the defaults insufficient.
+- Keep output compact Markdown/text; do not expose raw Reddit JSON or raw old.reddit HTML by default.
