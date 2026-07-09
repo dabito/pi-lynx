@@ -1,6 +1,6 @@
 {
   "name": "pi-lynx",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Pi tools for context-safe plain-text web, GitHub, Wikipedia, Reddit search, and page fetch. No API keys.",
   "type": "module",
   "main": "index.ts",
@@ -68,7 +68,7 @@
     "extensions": [
       "./index.ts"
     ],
-    "image": "https://raw.githubusercontent.com/dabito/pi-lynx/main/docs/demo/pi-lynx.gif"
+    "image": "https://raw.githubusercontent.com/dabito/pi-lynx/main/docs/demo/pi-lynx.png"
   },
   "repository": {
     "type": "git",

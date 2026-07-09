@@ -23,6 +23,10 @@ Give Pi agents context-safe plain-text web search, GitHub/Wikipedia search, Redd
 
 ## Demo
 
+![pi-lynx in action](https://raw.githubusercontent.com/dabito/pi-lynx/main/docs/demo/pi-lynx.png)
+
+Animated terminal demo:
+
 ![pi-lynx terminal demo](https://raw.githubusercontent.com/dabito/pi-lynx/main/docs/demo/pi-lynx.gif)
 
 Recorded terminal demo source: [`docs/demo/pi-lynx.cast`](https://github.com/dabito/pi-lynx/blob/main/docs/demo/pi-lynx.cast)

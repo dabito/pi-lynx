@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.3] - 2026-07-08
+
+### Changed
+
+- Switched `pi.dev` gallery preview from the 1.5MB demo GIF to a lighter PNG screenshot.
+- README demo section now leads with the static screenshot, keeping the animated GIF below it.
+
 ## [1.1.2] - 2026-07-08
 
 ### Added
