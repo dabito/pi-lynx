@@ -26,10 +26,15 @@ Findings so far (2026-07-03):
 Next step: decide whether to go through `lynx -dump` (reuse existing tool-composition pattern, accept the messier text parsing) or native `fetch` + light HTML parsing (cleaner given the known `result-wrapper`/`data-type="web"` hooks, but breaks the "everything goes through lynx" consistency pi-lynx otherwise has) — then capture a couple of real result pages as fixtures and implement whichever parser.
 
 
-## Reddit thread fallback
+## Reddit: old.reddit search primary; thread fetch fallback
 
-`lynx_reddit_search` now uses old.reddit.com as the primary path because Reddit JSON search frequently returns 403/bot-check responses. Remaining Reddit follow-up:
+Current behavior:
+
+- `lynx_reddit_search` uses old.reddit.com as the primary path because Reddit JSON search frequently returns 403/bot-check responses.
+- `lynx_reddit_fetch` still uses Reddit's `.json` thread endpoint because it returns cleaner post/comment data when available.
+
+Remaining Reddit follow-up:
 
 - Add an old.reddit thread fallback for `lynx_reddit_fetch` if Reddit's `.json` thread endpoint becomes unreliable.
-- Consider exposing old Reddit sort/time controls (`sort=hot|top|new|comments`, `t=hour|day|week|month|year|all`) after real usage proves the defaults insufficient.
+- Consider exposing old Reddit search controls (`sort=hot|top|new|comments`, `t=hour|day|week|month|year|all`) after real usage proves the defaults insufficient.
 - Keep output compact Markdown/text; do not expose raw Reddit JSON or raw old.reddit HTML by default.

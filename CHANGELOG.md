@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.2] - 2026-07-08
+
+### Added
+
+- Gallery preview image for [pi.dev/packages](https://pi.dev/packages) listing via `pi.image` pointing at the demo GIF.
+
 ## [1.1.1] - 2026-07-04
 
 ### Fixed
