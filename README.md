@@ -1,4 +1,8 @@
 # pi-lynx
+[![npm version](https://img.shields.io/npm/v/pi-lynx.svg)](https://www.npmjs.com/package/pi-lynx)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Pi package](https://img.shields.io/badge/Pi-package-blue)](https://pi.dev/packages/pi-lynx)
+[![Requires lynx](https://img.shields.io/badge/requires-lynx-orange)](#requirements)
 
 Give Pi agents context-safe plain-text web search, GitHub/Wikipedia search, Reddit search/thread fetch, and page fetch with no API keys. Body text first; links are opt-in and capped.
 
