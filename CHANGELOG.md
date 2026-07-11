@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.1.4] - 2026-07-08
+
+### Added
+
+- `lynx_brave_search` — web search via [Brave Search](https://search.brave.com), an alternative index to DDG Lite. Parses Brave's server-rendered HTML directly (native fetch + browser User-Agent, no lynx, no API key). Foundation for a future DDG→Brave fallback chain.
+
+### Changed
+
+- README: capabilities matrix, tool composition diagram, quick-start example, and behavior/failure notes now cover Brave search.
+
 ## [1.1.3] - 2026-07-08
 
 ### Changed

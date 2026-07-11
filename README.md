@@ -15,6 +15,7 @@ Give Pi agents context-safe plain-text web search, GitHub/Wikipedia search, Redd
 | Need | Tool |
 | ---- | ---- |
 | Current web search | `lynx_web_search` |
+| Alternative web index | `lynx_brave_search` |
 | GitHub search | `lynx_web_search_github` |
 | Wikipedia/reference search | `lynx_web_search_wikipedia` |
 | Reddit discussion search | `lynx_reddit_search` |
@@ -66,12 +67,34 @@ Then reload or restart pi:
 - [lynx](https://lynx.invisible-island.net/) installed and on `PATH`
 - Pi coding agent
 
+#### Installing lynx
+
+| OS | Command |
+| -- | ------- |
+| macOS | `brew install lynx` |
+| Debian/Ubuntu | `sudo apt install lynx` |
+| Fedora/RHEL | `sudo dnf install lynx` |
+| Arch | `sudo pacman -S lynx` |
+| Windows | Use WSL (`wsl --install`), then `sudo apt install lynx` inside it. Native Windows lynx builds are unmaintained; pi-lynx shells out to a Unix `lynx` binary. |
+
+Verify:
+
+```bash
+lynx -version
+```
 ### Quick start
 
 Search:
 
 ```text
 lynx_web_search: rust language
+lynx_web_search: rust language
+```
+
+Alternative index (when DDG throttles):
+
+```text
+lynx_brave_search: rust language
 ```
 
 Reddit discussion search:
@@ -132,9 +155,12 @@ lynx_web_search           ← DDG Lite URL construction + result parsing
 lynx_web_search_github    ← convenience wrapper (pre-set site:github.com)
 lynx_web_search_wikipedia ← convenience wrapper (pre-set site:wikipedia.org)
 
+lynx_brave_search         ← Brave Search (native fetch + HTML parse; alt index)
 lynx_reddit_search        ← old.reddit.com search (lynx -dump + parse)
 lynx_reddit_fetch         ← reddit thread .json API (native fetch)
 ```
+
+Brave search fetches Brave's server-rendered HTML directly (with a browser User-Agent) and parses `data-type="web"` blocks — a different index than DDG, useful when DDG Lite throttles or returns poor results. It needs no API key.
 
 Reddit search uses old.reddit.com first because Reddit's JSON search endpoint usually blocks bot-like traffic. Reddit thread fetch still uses the public `.json` thread endpoint because it returns cleaner post/comment data when available.
 
@@ -183,7 +209,16 @@ Search Wikipedia using DuckDuckGo Lite. Convenience wrapper around `lynx_web_sea
 | ------------- | ------ | -------- | ------- | -------------------- |
 | `query`       | string | ✓        | —       | Search query         |
 | `max_results` | number |          | 8       | Max results to return |
+| `max_results` | number |          | 8       | Max results to return |
 
+### `lynx_brave_search`
+
+Search the web via [Brave Search](https://search.brave.com) and return structured results: titles, snippets, domains, and URLs. No API key required. Use as an alternative to `lynx_web_search` when DDG Lite throttles or returns poor results — it is a different index and ranking.
+
+| Name          | Type   | Required | Default | Description                         |
+| ------------- | ------ | -------- | ------- | ----------------------------------- |
+| `query`       | string | ✓        | —       | Search query                        |
+| `max_results` | number |          | 8       | Max results to return (1–20)        |
 ### `lynx_reddit_fetch`
 
 Fetch a Reddit thread and return compact agent-readable text: post title/body plus top comments sorted by score. Uses Reddit's public `.json` endpoint internally; no `lynx` or API key required.
@@ -209,13 +244,16 @@ Search Reddit threads via old.reddit.com and return compact agent-readable resul
 - Links are explicit opt-in: set `include_links: true`.
 - When links are included, they are capped by `link_limit`.
 - `max_lines` caps body text only.
-- DDG Lite site-filtered searches may throttle; `PI_LYNX_SITE_SEARCH_INTERVAL_MS` spaces them out.
+- DDG Lite site-filtered searches may throttle; `PI_LYNX_SITE_SEARCH_INTERVAL_MS` spaces them out. If DDG still throttles, try `lynx_brave_search` (different index).
+- `lynx_brave_search` uses native fetch (not lynx) against Brave's server-rendered HTML; it does not need `lynx` on `PATH`.
+- `lynx_reddit_search` uses old.reddit.com and returns compact Markdown/text, not raw HTML.
 - `lynx_reddit_search` uses old.reddit.com and returns compact Markdown/text, not raw HTML.
 
 ## Failure modes
 
 - Missing `lynx`: install it and ensure it is on `PATH`.
-- Site-filtered search throttled: wait, or raise `PI_LYNX_SITE_SEARCH_INTERVAL_MS`.
+- Site-filtered search throttled: wait, raise `PI_LYNX_SITE_SEARCH_INTERVAL_MS`, or switch to `lynx_brave_search`.
+- Brave bot check: `lynx_brave_search` may receive no organic results from data-center IPs; retry later or from a different network.
 - JS-heavy / browser-required pages: Lynx may not capture the interactive content.
 - Reddit bot check: `lynx_reddit_search` uses old.reddit.com because Reddit JSON search is often blocked. `lynx_reddit_fetch` still uses Reddit's `.json` thread endpoint and can receive an HTML bot-check page instead of JSON; there is no bypass, so retry later or from a different network.
 

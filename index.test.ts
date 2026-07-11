@@ -20,6 +20,7 @@ import {
 	stripLinkMarkers,
 	buildDdgLiteUrl,
 	parseSearchResults,
+	parseBraveResults,
 	formatSearchResults,
 	normalizeSearchQuery,
 	getSiteSearchMinIntervalMs,
@@ -32,6 +33,7 @@ import {
 import {
 	buildRedditThreadJsonUrl,
 	buildRedditSearchJsonUrl,
+	buildBraveSearchUrl,
 	buildOldRedditSearchUrl,
 } from "./core.ts";
 
@@ -45,6 +47,7 @@ const DDG_GITHUB_RAW = readFileSync(fixture("ddg-github.txt"), "utf8");
 const REDDIT_THREAD_JSON = JSON.parse(readFileSync(fixture("reddit-thread.json"), "utf8"));
 const REDDIT_SEARCH_JSON = JSON.parse(readFileSync(fixture("reddit-search.json"), "utf8"));
 const OLD_REDDIT_SEARCH_RAW = readFileSync(fixture("old-reddit-search.txt"), "utf8");
+const BRAVE_SEARCH_HTML = readFileSync(fixture("brave-search.html"), "utf8");
 
 // ── Unit tests: parseLinks ────────────────────────────────────────────
 
@@ -578,4 +581,48 @@ describe("formatRedditSearchResults", () => {
 		const text = formatRedditSearchResults("nonexistent query", []);
 		assert.ok(text.includes("No reddit results found"));
 	});
+
+
+// ── Unit tests: buildBraveSearchUrl / parseBraveResults ──────────────
+
+describe("buildBraveSearchUrl", () => {
+	it("builds a Brave search URL", () => {
+		const url = buildBraveSearchUrl("typebox schema");
+		assert.ok(url.startsWith("https://search.brave.com/search"));
+		assert.ok(url.includes("q=typebox+schema") || url.includes("q=typebox%20schema"));
+		assert.ok(url.includes("source=web"));
+	});
+
+	it("appends a site filter to the query when provided", () => {
+		const url = buildBraveSearchUrl("extensions", "site:github.com");
+		assert.ok(url.includes("site%3Agithub.com") || url.includes("site:github.com"));
+	});
+});
+
+describe("parseBraveResults", () => {
+	it("extracts organic results from Brave HTML", () => {
+		const results = parseBraveResults(BRAVE_SEARCH_HTML, 10);
+		assert.ok(results.length >= 3);
+		assert.ok(results[0].url.startsWith("https://"));
+		assert.ok(results[0].domain.length > 0);
+		assert.ok(results[0].title.length > 0);
+		assert.ok(results[0].snippet.length > 0);
+	});
+
+	it("strips the breadcrumb and leading site-name from titles", () => {
+		const results = parseBraveResults(BRAVE_SEARCH_HTML, 10);
+		// Real titles do not contain the rendered breadcrumb separator.
+		assert.ok(results.every((r) => !r.title.includes("›")));
+	});
+
+	it("respects maxResults", () => {
+		const results = parseBraveResults(BRAVE_SEARCH_HTML, 2);
+		assert.equal(results.length, 2);
+	});
+
+	it("returns [] for HTML with no organic result blocks", () => {
+		const results = parseBraveResults("<html>bot check page</html>", 10);
+		assert.equal(results.length, 0);
+	});
+});
 });

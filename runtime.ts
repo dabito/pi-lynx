@@ -2,10 +2,12 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import {
+	buildBraveSearchUrl,
 	buildDdgLiteUrl,
 	buildOldRedditSearchUrl,
 	buildRedditThreadJsonUrl,
 	normalizeSearchQuery,
+	parseBraveResults,
 	parseLinks,
 	parseOldRedditSearch,
 	parseRedditThread,
@@ -14,6 +16,7 @@ import {
 	stripLinkMarkers,
 	type RedditSearchResult,
 	type RedditThread,
+	type SearchResult,
 } from "./core.ts";
 
 const execFileAsync = promisify(execFile);
@@ -240,4 +243,72 @@ export async function doRedditSearch(
 	const url = buildOldRedditSearchUrl(query, subreddit);
 	const raw = await lynxDump(url, 15_000, signal);
 	return parseOldRedditSearch(raw, maxResults);
+}
+// ── Brave Search ──────────────────────────────────────────────────────
+
+const BROWSER_USER_AGENT =
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+	"(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
+/** Fetch Brave Search server-rendered HTML with a browser User-Agent so the
+ *  SvelteKit SSR payload (organic `data-type="web"` blocks) is returned. */
+async function fetchBraveHtml(
+	url: string,
+	timeoutMs: number,
+	signal?: AbortSignal,
+): Promise<string> {
+	const controller = new AbortController();
+	const timeout = setTimeout(() => controller.abort(), timeoutMs);
+	signal?.addEventListener("abort", () => controller.abort(), { once: true });
+
+	let res: Response;
+	try {
+		res = await fetch(url, {
+			headers: {
+				"User-Agent": BROWSER_USER_AGENT,
+				Accept: "text/html,application/xhtml+xml",
+				"Accept-Language": "en-US,en;q=0.9",
+			},
+			signal: controller.signal,
+		});
+	} catch (err: unknown) {
+		if (controller.signal.aborted) {
+			throw new Error("Brave search request timed out or was cancelled.", {
+				cause: err,
+			});
+		}
+		throw err;
+	} finally {
+		clearTimeout(timeout);
+	}
+
+	if (!res.ok) {
+		throw new Error(
+			`Brave returned ${res.status} ${res.statusText || ""}. ` +
+				"Retry later or from a different network.",
+		);
+	}
+
+	return res.text();
+}
+
+export async function doBraveSearch(
+	query: string,
+	maxResults: number,
+	signal?: AbortSignal,
+): Promise<SearchResult[]> {
+	const url = buildBraveSearchUrl(query);
+	const html = await fetchBraveHtml(url, 15_000, signal);
+	const results = parseBraveResults(html, maxResults);
+
+	// Zero organic blocks usually means a bot-check/challenge page rather than
+	// a genuine empty result set — surface a clear, non-retryable-by-itself error.
+	if (results.length === 0 && !/data-type="web"/.test(html)) {
+		throw new Error(
+			"Brave returned no parseable organic results (possible bot check). " +
+				"Retry later or from a different network.",
+		);
+	}
+
+	return results;
 }

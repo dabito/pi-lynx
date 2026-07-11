@@ -63,6 +63,7 @@ describe("tool contract", () => {
 				"lynx_web_search_wikipedia",
 				"lynx_reddit_fetch",
 				"lynx_reddit_search",
+				"lynx_brave_search",
 			],
 		);
 	});

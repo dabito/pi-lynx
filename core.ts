@@ -234,6 +234,88 @@ export function normalizeSearchQuery(
 	return { cleanQuery, effectiveFilter };
 }
 
+// ── Brave Search ──────────────────────────────────────────────────
+
+/** Build a Brave Search URL. Brave has no clean site-scoping param, so any
+ *  site restriction is appended to the query (e.g. `site:github.com`). */
+export function buildBraveSearchUrl(query: string, siteFilter?: string): string {
+	const u = new URL("https://search.brave.com/search");
+	u.searchParams.set(
+		"q",
+		siteFilter ? `${query.trim()} ${siteFilter}` : query.trim(),
+	);
+	u.searchParams.set("source", "web");
+	return u.toString();
+}
+
+/** Decode common HTML entities in extracted text. */
+function decodeHtmlEntities(s: string): string {
+	return s
+		.replace(/&#x27;/g, "'")
+		.replace(/&#39;/g, "'")
+		.replace(/&quot;/g, '"')
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&nbsp;/g, " ")
+		.replace(/&amp;/g, "&");
+}
+
+/** Strip tags + collapse whitespace + decode entities. */
+function cleanBraveText(s: string): string {
+	return decodeHtmlEntities(s.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim());
+}
+
+/**
+ * Parse Brave Search server-rendered HTML into SearchResult[].
+ *
+ * Brave renders organic results as `data-type="web"` blocks; the title is the
+ * first `<a class="...l1">` anchor (its href is the real target URL), and the
+ * snippet lives in a `line-clamp-dynamic` element. Unlike DDG Lite, this is
+ * parsed from raw HTML (fetched with a browser User-Agent) rather than via
+ * `lynx -dump`, because lynx flattens the title/snippet boundary ambiguously.
+ * Same native-fetch precedent as the Reddit thread fetch.
+ */
+export function parseBraveResults(html: string, maxResults: number): SearchResult[] {
+	const blocks = html
+		.split(/(?=data-type="web")/)
+		.filter((b) => b.startsWith('data-type="web"'));
+	const results: SearchResult[] = [];
+
+	for (const block of blocks) {
+		if (results.length >= maxResults) break;
+
+		const anchor = block.match(/<a[^>]*class="[^"]*\bl1\b[^"]*"[\s\S]*?<\/a>/);
+		if (!anchor) continue;
+		const url = anchor[0].match(/href="([^"]+)"/)?.[1] ?? "";
+		if (!url) continue;
+
+		// Title = anchor inner minus the breadcrumb (domain › seg › seg) and the
+		// leading site-name token Brave renders before the title.
+		const titleRaw = cleanBraveText(
+			anchor[0].replace(/^<a[^>]*>/, "").replace(/<\/a>$/, ""),
+		)
+			.replace(/\b[a-z0-9.-]+\.[a-z]{2,}(?:\s*[›>]\s*[^ ]+)+/i, "")
+			.replace(/^.+?\s{2,}/, "")
+			.trim();
+		if (!titleRaw) continue;
+
+		const snippetMatch = block.match(
+			/class="[^"]*line-clamp-dynamic[^"]*"[^>]*>([\s\S]*?)<\/div>/,
+		);
+		const snippet = cleanBraveText(snippetMatch?.[1] ?? "");
+
+		let domain = "";
+		try {
+			domain = new URL(url).hostname.replace(/^www\./, "");
+		} catch {
+			/* invalid url — leave domain empty */
+		}
+
+		results.push({ title: titleRaw, snippet, domain, url });
+	}
+
+	return results;
+}
 // ── Reddit ──────────────────────────────────────────────────────────
 
 export interface RedditComment {

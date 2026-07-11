@@ -15,12 +15,14 @@ import { truncateToWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 import {
+	buildBraveSearchUrl,
 	buildDdgLiteUrl,
 	buildOldRedditSearchUrl,
 	formatRedditSearchResults,
 	formatRedditThread,
 	formatSearchResults,
 	normalizeSearchQuery,
+	parseBraveResults,
 	parseLinks,
 	parseOldRedditSearch,
 	parseRedditSearch,
@@ -30,6 +32,7 @@ import {
 	stripLinkMarkers,
 } from "./core.ts";
 import {
+	doBraveSearch,
 	doFetch,
 	doRedditFetch,
 	doRedditSearch,
@@ -38,12 +41,14 @@ import {
 } from "./runtime.ts";
 
 export {
+	buildBraveSearchUrl,
 	buildDdgLiteUrl,
 	buildOldRedditSearchUrl,
 	formatRedditSearchResults,
 	formatRedditThread,
 	formatSearchResults,
 	normalizeSearchQuery,
+	parseBraveResults,
 	parseLinks,
 	parseOldRedditSearch,
 	parseRedditSearch,
@@ -51,6 +56,7 @@ export {
 	parseSearchResults,
 	resolveDdgRedirect,
 	stripLinkMarkers,
+	doBraveSearch,
 	doFetch,
 	doRedditFetch,
 	doRedditSearch,
@@ -498,6 +504,70 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 					content: [{ type: "text", text: `Reddit search failed: ${message}` }],
 					isError: true,
 					details: { source: "old.reddit", query: params.query, error: message },
+				};
+			}
+		},
+	});
+
+	pi.registerTool({
+		name: "lynx_brave_search",
+		label: "Lynx Brave Search",
+		description:
+			"Search the web via Brave Search and return compact agent-readable results: titles, snippets, domains, and URLs. No API key required. Useful as an alternative index when DuckDuckGo Lite (lynx_web_search) throttles or returns poor results.",
+		promptSnippet: "Search the web via Brave Search (alternative to lynx_web_search)",
+		promptGuidelines: [
+			"Use lynx_brave_search as an alternative to lynx_web_search when DDG Lite throttles, returns poor results, or a second index/ranking is wanted.",
+			"Uses Brave Search's server-rendered HTML directly (not lynx); no API key needed.",
+			"Returns compact text: title, snippet, domain, and url per result.",
+			"Use lynx_web_fetch on a result url when you need the full page content.",
+		],
+		renderCall(args, theme) {
+			return renderToolCall("Lynx Brave Search", args, theme as ThemeLike);
+		},
+		renderResult(result, _options, theme) {
+			return renderToolResult("Lynx Brave Search", result, theme as ThemeLike);
+		},
+		parameters: Type.Object({
+			query: Type.String({ description: "Search query" }),
+			max_results: Type.Optional(
+				Type.Number({
+					description: "Maximum number of results to return (1–20, default 8)",
+					default: 8,
+					minimum: 1,
+					maximum: 20,
+				}),
+			),
+		}),
+		async execute(_toolCallId, params, signal, onUpdate) {
+			const maxResults = Math.min(Math.max(params.max_results ?? 8, 1), 20);
+
+			onUpdate?.({
+				content: [{ type: "text", text: `Searching Brave: "${params.query}"...` }],
+				details: undefined,
+			});
+
+			try {
+				const results = await doBraveSearch(params.query, maxResults, signal);
+				const text = formatSearchResults(params.query, {
+					instantAnswer: null,
+					results,
+				});
+
+				return {
+					content: [{ type: "text", text }],
+					details: {
+						source: "brave",
+						query: params.query,
+						resultCount: results.length,
+						maxResults,
+					},
+				};
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				return {
+					content: [{ type: "text", text: `Brave search failed: ${message}` }],
+					isError: true,
+					details: { source: "brave", query: params.query, error: message },
 				};
 			}
 		},
