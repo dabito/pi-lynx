@@ -184,6 +184,7 @@ Search the web using DuckDuckGo Lite. Returns structured results with titles, sn
 | `query`       | string | ✓        | —       | Search query; supports `!gh` and `!w` shortcuts |
 | `max_results` | number |          | 8       | Max results to return (1–20)                    |
 | `site`        | string |          | —       | Restrict to `"github"` or `"wikipedia"`       |
+| `engine`      | string |          | `"ddg"` | `"ddg"`, `"brave"`, or `"auto"` (runs the `PI_LYNX_SEARCH_ENGINES` chain with fallback) |
 
 Shortcuts:
 
@@ -191,6 +192,8 @@ Shortcuts:
 - `!w <query>` or `site: "wikipedia"` → restricts to Wikipedia
 
 If both a bang shortcut and an explicit site filter are provided, the explicit filter wins. For example, `query: "!gh rust", site: "wikipedia"` searches Wikipedia for `rust`.
+
+`engine` defaults to `"ddg"` so existing behavior is unchanged. Set `engine: "brave"` to search Brave directly, or `engine: "auto"` to run the ordered engine chain configured by `PI_LYNX_SEARCH_ENGINES`, falling back to the next engine on error or (by default) on an empty result set.
 
 ### `lynx_web_search_github`
 
@@ -245,6 +248,7 @@ Search Reddit threads via old.reddit.com and return compact agent-readable resul
 - When links are included, they are capped by `link_limit`.
 - `max_lines` caps body text only.
 - DDG Lite site-filtered searches may throttle; `PI_LYNX_SITE_SEARCH_INTERVAL_MS` spaces them out. If DDG still throttles, try `lynx_brave_search` (different index).
+- `lynx_web_search` defaults to DDG-only (`engine: "ddg"`); pass `engine: "auto"` to run the `PI_LYNX_SEARCH_ENGINES` chain with fallback on error or empty results.
 - `lynx_brave_search` uses native fetch (not lynx) against Brave's server-rendered HTML; it does not need `lynx` on `PATH`.
 - `lynx_reddit_search` uses old.reddit.com and returns compact Markdown/text, not raw HTML.
 - `lynx_reddit_search` uses old.reddit.com and returns compact Markdown/text, not raw HTML.
@@ -262,6 +266,8 @@ Search Reddit threads via old.reddit.com and return compact agent-readable resul
 | Variable | Default | Min | Description |
 | -------- | ------- | --- | ----------- |
 | `PI_LYNX_SITE_SEARCH_INTERVAL_MS` | `3000` | `1000` | Minimum spacing between DDG Lite `site:` searches. Use `4000` or higher if DuckDuckGo throttles repeated GitHub/Wikipedia searches. |
+| `PI_LYNX_SEARCH_ENGINES` | `ddg` | — | Comma list of engines for `lynx_web_search`'s `engine: "auto"` chain, e.g. `ddg,brave`. Unknown/empty values fall back to `ddg`. Only takes effect when `engine: "auto"` is passed. |
+| `PI_LYNX_SEARCH_FALLBACK_ON_EMPTY` | `true` | — | When `true` (default), an engine that returns zero results and no instant answer is skipped in favor of the next engine in the chain. Set to `0`/`false`/`no`/`off` to disable. |
 
 ## Command catalog
 

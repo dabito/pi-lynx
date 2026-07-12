@@ -8,6 +8,7 @@ type ToolSchema = {
 		include_links?: { default?: boolean };
 		link_limit?: { default?: number };
 		max_lines?: { default?: number };
+		engine?: { default?: string; anyOf?: unknown[] };
 	};
 };
 
@@ -66,6 +67,26 @@ describe("tool contract", () => {
 				"lynx_brave_search",
 			],
 		);
+	});
+
+	it("gives lynx_web_search an opt-in engine selector defaulting to ddg", () => {
+		const tools = collectTools();
+		const search = tools.find((t) => t.name === "lynx_web_search");
+		assert.ok(search, "lynx_web_search registered");
+		assert.equal(search?.parameters.properties?.engine?.default, "ddg");
+	});
+
+	it("does not add the engine selector to site-scoped or brave-only tools", () => {
+		const tools = collectTools();
+		for (const name of [
+			"lynx_web_search_github",
+			"lynx_web_search_wikipedia",
+			"lynx_brave_search",
+		]) {
+			const tool = tools.find((t) => t.name === name);
+			assert.ok(tool, `${name} registered`);
+			assert.equal(tool?.parameters.properties?.engine, undefined, `${name} should not expose engine`);
+		}
 	});
 
 	it("renders calls with pi-hledit visual pattern", () => {

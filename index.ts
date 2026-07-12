@@ -39,6 +39,14 @@ import {
 	doSearch,
 	getSiteSearchMinIntervalMs,
 } from "./runtime.ts";
+import {
+	normalizeEngineParam,
+	parseFallbackOnEmpty,
+	parseSearchEngineList,
+	resolveEngines,
+	runSearchChain,
+	type SearchEngineName,
+} from "./engines.ts";
 
 export {
 	buildBraveSearchUrl,
@@ -62,7 +70,13 @@ export {
 	doRedditSearch,
 	doSearch,
 	getSiteSearchMinIntervalMs,
+	normalizeEngineParam,
+	parseFallbackOnEmpty,
+	parseSearchEngineList,
+	resolveEngines,
+	runSearchChain,
 };
+export type { SearchEngineName };
 
 interface SearchToolConfig {
 	name: string;
@@ -73,6 +87,8 @@ interface SearchToolConfig {
 	siteFilter?: string;
 	contextLabel?: string;
 	errorPrefix?: string;
+	/** Expose the "engine" ddg/brave/auto selector param (lynx_web_search only). */
+	supportsEngineSelection?: boolean;
 }
 
 type ThemeLike = {
@@ -212,6 +228,21 @@ function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 							}),
 						),
 					}),
+			...(config.supportsEngineSelection
+				? {
+						engine: Type.Optional(
+							Type.Union(
+								[Type.Literal("ddg"), Type.Literal("brave"), Type.Literal("auto")],
+								{
+									description:
+										'Search engine to use: "ddg" (default), "brave", or "auto" ' +
+										"(runs the PI_LYNX_SEARCH_ENGINES chain with fallback)",
+									default: "ddg",
+								},
+							),
+						),
+					}
+				: {}),
 		}),
 		async execute(_toolCallId, params, signal, onUpdate) {
 			const maxResults = Math.min(Math.max(params.max_results ?? 8, 1), 20);
@@ -222,6 +253,15 @@ function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 				else if (params.site === "wikipedia") siteFilter = "site:wikipedia.org";
 			}
 
+			const engineParam = config.supportsEngineSelection
+				? normalizeEngineParam(params.engine)
+				: "ddg";
+			const engineNames: SearchEngineName[] =
+				engineParam === "auto"
+					? parseSearchEngineList(process.env.PI_LYNX_SEARCH_ENGINES)
+					: [engineParam];
+			const fallbackOnEmpty = parseFallbackOnEmpty(process.env.PI_LYNX_SEARCH_FALLBACK_ON_EMPTY);
+
 			const contextLabel = config.contextLabel ?? "Searching";
 			onUpdate?.({
 				content: [{ type: "text", text: `${contextLabel}: "${params.query}"...` }],
@@ -229,15 +269,24 @@ function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 			});
 
 			try {
-				const parsed = await doSearch(params.query, maxResults, siteFilter, signal);
-				const text = formatSearchResults(params.query, parsed);
+				const chainResult = await runSearchChain(
+					params.query,
+					maxResults,
+					siteFilter,
+					resolveEngines(engineNames),
+					fallbackOnEmpty,
+					signal,
+				);
+				const text = formatSearchResults(params.query, chainResult);
 
 				return {
 					content: [{ type: "text", text }],
 					details: {
 						query: params.query,
-						resultCount: parsed.results.length,
-						hasInstantAnswer: parsed.instantAnswer !== null,
+						resultCount: chainResult.results.length,
+						hasInstantAnswer: chainResult.instantAnswer !== null,
+						source: chainResult.engine,
+						fallbackOccurred: chainResult.fallbackOccurred,
 						...(config.siteFilter ? { site: config.siteFilter.replace("site:", "") } : {}),
 					},
 				};
@@ -245,7 +294,7 @@ function registerSearchTool(pi: ExtensionAPI, config: SearchToolConfig): void {
 				const message = err instanceof Error ? err.message : String(err);
 				const errorPrefix = config.errorPrefix ?? "Search failed";
 				const normalized = normalizeSearchQuery(params.query, siteFilter);
-				const retryHint = (normalized.effectiveFilter?.startsWith("site:"))
+				const retryHint = (normalized.effectiveFilter?.startsWith("site:") && engineNames.includes("ddg"))
 					? ` DDG Lite often throttles repeated site-filtered searches; retry after ${getSiteSearchMinIntervalMs(process.env.PI_LYNX_SITE_SEARCH_INTERVAL_MS)}ms or try a general search without the site filter.`
 					: "";
 				return {
@@ -347,7 +396,9 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 			"Use lynx_web_search when you need current information from the internet — recent events, documentation, package versions, error solutions, etc.",
 			"lynx_web_search requires lynx to be installed on the system.",
 			"Supports !gh (GitHub) and !w (Wikipedia) bang shortcuts, or use the site parameter.",
+			'Defaults to DuckDuckGo Lite. Set engine="brave" to use Brave instead, or engine="auto" to run the configured PI_LYNX_SEARCH_ENGINES chain with fallback.',
 		],
+		supportsEngineSelection: true,
 	});
 
 	registerSearchTool(pi, {
@@ -547,7 +598,7 @@ export default function lynxDdgSearch(pi: ExtensionAPI) {
 			});
 
 			try {
-				const results = await doBraveSearch(params.query, maxResults, signal);
+				const results = await doBraveSearch(params.query, maxResults, undefined, signal);
 				const text = formatSearchResults(params.query, {
 					instantAnswer: null,
 					results,

@@ -34,7 +34,7 @@
     "no-account"
   ],
   "scripts": {
-    "test": "npx tsx index.test.ts && npx tsx tool-contract.test.ts",
+    "test": "npx tsx index.test.ts && npx tsx tool-contract.test.ts && npx tsx engines.test.ts",
     "build": "npm run typecheck",
     "typecheck": "tsc --noEmit --strict --skipLibCheck",
     "lint": "eslint ."
@@ -58,7 +58,9 @@
     "index.ts",
     "core.ts",
     "runtime.ts",
+    "engines.ts",
     "tool-contract.test.ts",
+    "engines.test.ts",
     "test/fixtures/",
     "README.md",
     "CHANGELOG.md",

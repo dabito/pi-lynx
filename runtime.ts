@@ -295,9 +295,10 @@ async function fetchBraveHtml(
 export async function doBraveSearch(
 	query: string,
 	maxResults: number,
+	siteFilter?: string,
 	signal?: AbortSignal,
 ): Promise<SearchResult[]> {
-	const url = buildBraveSearchUrl(query);
+	const url = buildBraveSearchUrl(query, siteFilter);
 	const html = await fetchBraveHtml(url, 15_000, signal);
 	const results = parseBraveResults(html, maxResults);
 
