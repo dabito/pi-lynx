@@ -581,6 +581,7 @@ describe("formatRedditSearchResults", () => {
 		const text = formatRedditSearchResults("nonexistent query", []);
 		assert.ok(text.includes("No reddit results found"));
 	});
+});
 
 
 // ── Unit tests: buildBraveSearchUrl / parseBraveResults ──────────────
@@ -596,6 +597,18 @@ describe("buildBraveSearchUrl", () => {
 	it("appends a site filter to the query when provided", () => {
 		const url = buildBraveSearchUrl("extensions", "site:github.com");
 		assert.ok(url.includes("site%3Agithub.com") || url.includes("site:github.com"));
+	});
+
+	it("normalizes !gh bangs for Brave queries", () => {
+		const url = buildBraveSearchUrl("!gh pi extension");
+		const q = new URL(url).searchParams.get("q");
+		assert.equal(q, "pi extension site:github.com");
+	});
+
+	it("lets explicit site filters override Brave bang shortcuts", () => {
+		const url = buildBraveSearchUrl("!gh rust language", "site:wikipedia.org");
+		const q = new URL(url).searchParams.get("q");
+		assert.equal(q, "rust language site:wikipedia.org");
 	});
 });
 
@@ -624,5 +637,4 @@ describe("parseBraveResults", () => {
 		const results = parseBraveResults("<html>bot check page</html>", 10);
 		assert.equal(results.length, 0);
 	});
-});
 });

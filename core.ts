@@ -239,10 +239,11 @@ export function normalizeSearchQuery(
 /** Build a Brave Search URL. Brave has no clean site-scoping param, so any
  *  site restriction is appended to the query (e.g. `site:github.com`). */
 export function buildBraveSearchUrl(query: string, siteFilter?: string): string {
+	const { cleanQuery, effectiveFilter } = normalizeSearchQuery(query, siteFilter);
 	const u = new URL("https://search.brave.com/search");
 	u.searchParams.set(
 		"q",
-		siteFilter ? `${query.trim()} ${siteFilter}` : query.trim(),
+		effectiveFilter ? `${cleanQuery} ${effectiveFilter}` : cleanQuery,
 	);
 	u.searchParams.set("source", "web");
 	return u.toString();

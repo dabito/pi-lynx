@@ -1,5 +1,17 @@
 # Changelog
 
+
+## [1.1.5] - 2026-07-11
+
+### Added
+
+- Configurable search engine adapter chain for `lynx_web_search`: set `engine` to `"ddg"`, `"brave"`, or `"auto"`.
+- `PI_LYNX_SEARCH_ENGINES` env config for ordered `auto` chains, currently `ddg` and `brave`.
+- `PI_LYNX_SEARCH_FALLBACK_ON_EMPTY` env config for empty-result fallback behavior.
+
+### Fixed
+
+- Brave-backed searches now normalize `!gh` / `!w` bang shortcuts and preserve explicit `site` precedence before appending Brave's `site:` query filter.
 ## [1.1.4] - 2026-07-08
 
 ### Added
