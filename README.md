@@ -8,7 +8,7 @@ Give Pi agents context-safe plain-text web search, GitHub/Wikipedia search, Redd
 
 [Capabilities](#capabilities) | [Install](#install) | [Quick start](#quick-start) | [Demo](#demo) | [Tools](#tools) | [Failure modes](#failure-modes)
 
-> Early v1.x. Search parses DuckDuckGo Lite's unofficial HTML and may throttle or break without notice. Requires `lynx` on `PATH`. JS-heavy pages are not supported.
+> Early v1.x. Search uses public HTML search surfaces (DDG Lite/site-filtered search and optional Brave Search HTML) that may throttle, block, or change without notice. Requires `lynx` on `PATH`. JS-heavy pages are not supported.
 
 ## Capabilities
 
@@ -24,7 +24,7 @@ Give Pi agents context-safe plain-text web search, GitHub/Wikipedia search, Redd
 
 - Agent-readable Markdown/text by default; no raw API dumps.
 - Capped outputs to avoid flooding context.
-- No API keys or accounts for DDG Lite, page fetch, old Reddit search, or Reddit thread JSON.
+- No API keys or accounts for DDG Lite, Brave Search HTML, page fetch, old Reddit search, or Reddit thread JSON.
 
 ## Demo
 
@@ -88,7 +88,6 @@ Search:
 
 ```text
 lynx_web_search: rust language
-lynx_web_search: rust language
 ```
 
 Alternative index (when DDG throttles):
@@ -125,6 +124,12 @@ Fetch with links:
 ```text
 lynx_web_fetch: https://example.com {"include_links": true, "link_limit": 20}
 ```
+### Search engine behavior
+
+- `lynx_web_search` uses the configured search-engine chain (`PI_LYNX_SEARCH_ENGINES`, defaulting to DDG-style public HTML search).
+- `lynx_brave_search` queries Brave Search HTML directly as an alternate no-key search surface.
+- GitHub and Wikipedia helpers are site-filtered convenience wrappers over the default web-search path.
+- These are best-effort HTML parsers, not search APIs; public search pages may throttle, block, or change markup.
 
 ### Alternative: install from git
 
