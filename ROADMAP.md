@@ -9,52 +9,62 @@
 
 ## Next stopping point
 
-**Ship `lynx_brave_search`.** It is the foundation for the multi-engine
-fallback chain (DDG throttled → Brave → …) and the highest-value unshipped
-item. Scope of the stop:
+**Improve result quality with DDG sponsored/ad filtering.** Smallest high-confidence
+quality win after the 1.1.5 search-chain release. Scope of the stop:
 
-1. Capture 2 real Brave result fixtures (general + one site-scoped) into `test/fixtures/`.
-2. Implement `buildBraveSearchUrl()` + `parseBraveResults()` in `core.ts` (heuristic parser — see research notes below).
-3. Register `lynx_brave_search` mirroring `lynx_web_search` (same params/`details`/render hooks).
-4. Parser + URL-builder tests; smoke a real query.
+1. Add a DDG fixture containing sponsored results (`duckduckgo.com/y.js`,
+   "Sponsored link", or equivalent ad markers).
+2. Teach the DDG parser to skip sponsored/ad blocks before result limiting.
+3. Preserve organic DDG parsing, instant answers, and site-filter behavior.
+4. Add regression tests for sponsored filtering and normal organic results.
 5. Patch release.
 
-Follow-on (separate stop, after Brave lands): wire `lynx_web_search` to fall
-back DDG → Brave when DDG returns a throttle/empty result, behind
-`PI_LYNX_SEARCH_FALLBACK=1` (default on).
+Next larger stop after that: **fetch hardening via Jina Reader fallback** for
+JS-heavy pages where `lynx -dump` returns thin or empty content.
+
+---
+
+## Recently shipped
+
+- **1.1.5:** `lynx_web_search` gained an `engine` selector (`"ddg"`,
+  `"brave"`, `"auto"`) plus a configurable DDG/Brave adapter chain via
+  `PI_LYNX_SEARCH_ENGINES` and `PI_LYNX_SEARCH_FALLBACK_ON_EMPTY`.
+- **1.1.4:** `lynx_brave_search` shipped as a direct Brave Search HTML tool
+  using native fetch + server-rendered organic result parsing.
+- **1.1.1:** `lynx_reddit_search` switched to old.reddit.com as primary search.
 
 ---
 
 ## Search: multi-engine + fallback chain
 
 Goal: one logical `lynx_web_search` that tries sources in order so a single
-provider's throttle/block never dead-ends the agent.
+provider's throttle/block does not dead-end the agent. DDG + Brave are live;
+next search work should improve quality and add optional engines.
 
-- **Brave Search** — researched, unimplemented. See findings below. Keyless via the plain web UI.
-- **SearXNG** — public instances (or self-hosted) need no key; lynx-readable HTML; candidate 3rd leg of the chain.
-- **Startpage** — Google results proxy, keyless; lower priority (heavier anti-bot).
-- **Fallback orchestration** — order + per-source throttle detection + short-circuit on first good result. Reuse the existing `PI_LYNX_SITE_SEARCH_INTERVAL_MS` pacing pattern.
-- Keep `lynx_web_search` as the stable agent-facing name; engines are an internal concern unless an explicit `engine` param proves useful later.
+- **DDG + Brave chain** — shipped in 1.1.5. Default remains DDG-only for
+  backward compatibility; `engine="auto"` opts into the configured chain.
+- **SearXNG** — public instances (or self-hosted) need no key; lynx-readable
+  HTML; candidate 3rd leg of the chain. Needs instance health/timeout policy.
+- **Startpage** — Google results proxy, keyless; lower priority because
+  anti-bot pressure is heavier.
+- **Fallback orchestration** — already handles ordered attempts, errors, and
+  empty outcomes. Remaining work: better throttle detection, per-engine retry
+  hints, and richer attempt metadata without bloating agent text.
+- **Engine adapters** — keep internal and backward-compatible. Keep
+  `lynx_brave_search` as explicit Brave-only alias even though
+  `lynx_web_search` can use Brave.
 
-### Brave Search — research notes (2026-07-03)
+### Brave Search — status notes
 
-- Reachable and server-side rendered: `https://search.brave.com/search?q=<query>&source=web` returns 200 with real content in the initial HTML (SvelteKit app, but organic results are present server-side, not just client-hydrated) — confirmed via both raw `curl` and `lynx -dump`.
-- Structural hooks exist in the raw HTML for a future non-lynx (native fetch + DOM-ish regex) parser if that's ever preferable: `<div class="result-wrapper ...">` / `<div class="result-content ...">`, `data-type="web"` on organic results.
-- `lynx -dump` output is usable but messier than DDG Lite's: heavy nav/button chrome at the top, favicon alt-text noise (renders as `U1F310` emoji codepoints), and result blocks aren't cleanly numbered like DDG Lite's `1.  Title` — a result looks like:
-  ```text
-     [13]
-     U1F310
-     Wikipedia
-     en.wikipedia.org > wiki > Rust_(programming_language)
-     Rust (programming language) - Wikipedia
-     1 week ago - Rust is a general-purpose programming language which
-     emphasizes performance, type safety, concurrency, and memory safety.
-     ...
-  ```
-  i.e. site name, then a breadcrumb-style URL path (`domain > segment > segment`), then title, then snippet — needs a heuristic parser (skip the nav/chrome preamble, detect result blocks by the breadcrumb-URL line shape) rather than a simple numbered-line split like `parseResultBlocks` uses for DDG Lite.
-- Query-dependent layout: some queries (e.g. sports scores, "world cup") return a rich answer widget (live scores/standings) instead of, or ahead of, a plain organic result list — a parser must skip these widgets gracefully or explicitly decline structured output for them.
-- Open question: rate-limiting/blocking under sustained automated queries — test whether Brave's bot defenses tolerate non-browser traffic over time (unlike the DDG Lite `site:` throttling we already handle).
-
+- Shipped as native fetch + raw HTML parser, not lynx, because lynx flattened
+  title/snippet boundaries ambiguously.
+- Organic result parser uses Brave server-rendered `data-type="web"` blocks.
+- Brave can still return 429 or unparseable bot-check/challenge pages; tool
+  fails loud with retry guidance. This is best-effort public HTML parsing, not
+  an official API.
+- Site filters are appended as `site:domain` in the query. Bang shortcuts
+  (`!gh`, `!w`) and explicit site precedence are normalized before Brave URL
+  generation.
 ---
 
 ## Fetch hardening
