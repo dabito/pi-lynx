@@ -19,8 +19,8 @@ quality win after the 1.1.5 search-chain release. Scope of the stop:
 4. Add regression tests for sponsored filtering and normal organic results.
 5. Patch release.
 
-Next larger stop after that: **fetch hardening via Jina Reader fallback** for
-JS-heavy pages where `lynx -dump` returns thin or empty content.
+Next larger stop after that: **SearXNG adapter** as an optional third search
+engine in the existing chain.
 
 ---
 
@@ -67,14 +67,19 @@ next search work should improve quality and add optional engines.
   generation.
 ---
 
-## Fetch hardening
+## Fetch scope boundary
 
-Goal: `lynx_web_fetch` should not dead-end on JS-heavy or non-HTML content.
+Goal: keep `lynx_web_fetch` a small, predictable text-browser fetcher. Avoid
+turning pi-lynx into a full web extraction/browser/PDF suite.
 
-- **Jina Reader fallback** — `r.jina.ai/<url>` returns clean markdown, keyless free tier. Chain: lynx returns thin/empty body → retry via Jina. Biggest single fix for our "JS-heavy pages unsupported" failure mode.
-- **Readability / main-content extraction** — strip nav/chrome/boilerplate from lynx dumps; keep the "body-text-first" promise sharper. May subsume part of what Jina gives us.
-- **PDF → text** — shell out to `pdftotext` (poppler) if present on PATH, same optional-binary pattern as `lynx`. Extends fetch to docs/PDFs keylessly.
-- **Fallback orchestration** — mirror the search chain: lynx → Jina, with clear per-step failure messages.
+- **In scope:** better error messages, bounded output, link handling, and small
+  parser fixes for plain HTML fetched by lynx.
+- **Deferred:** readability/main-content extraction, `pandoc`/`htmlq` pipelines,
+  PDF conversion, and alternate terminal-browser fallbacks (`w3m`, `elinks`).
+  Useful ideas, but they broaden pi-lynx beyond its current shape.
+- **Opt-in only if ever added:** Jina Reader or other third-party reader
+  services. They change the trust boundary and may need keys/rate limits, so
+  they should not be default behavior.
 
 ---
 
@@ -108,4 +113,6 @@ the decision is explicit:
 
 - **Video understanding** (YouTube transcripts, local video analysis) — needs an API or a vision model. Off-brand.
 - **Paid/API-key search providers** (Tavily, Exa, Perplexity, Serper, Google CSE) — defeats the differentiator. Could later surface as an optional `engine` opt-in, but never as the default path.
-- **Headless browser / JS execution** (Playwright/Puppeteer) — heavy dependency, anti-text-browser. Jina Reader fallback covers the realistic JS-page need at far lower cost.
+- **Headless browser / JS execution** (Playwright/Puppeteer) — heavy dependency, anti-text-browser.
+- **Third-party reader fallbacks by default** (Jina Reader, hosted readability services) — changes the trust boundary from direct fetch to proxy fetch; maybe opt-in someday, not default.
+- **Full document extraction suite** (PDF conversion, readability pipelines, site-specific cleanup) — useful, but broader than pi-lynx's current search/fetch scope.
