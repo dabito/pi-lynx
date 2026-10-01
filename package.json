@@ -44,9 +44,10 @@
     "typecheck": "tsc --noEmit --strict --skipLibCheck",
     "lint": "eslint ."
   },
-  "dependencies": {
-    "@earendil-works/pi-tui": "^0.79.9",
-    "typebox": "^1.3.0"
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -55,9 +56,6 @@
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.61.1"
-  },
-  "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
   },
   "files": [
     "index.ts",
